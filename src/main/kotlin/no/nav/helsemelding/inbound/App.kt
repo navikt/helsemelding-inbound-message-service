@@ -24,7 +24,7 @@ fun main() = SuspendApp {
                 Netty,
                 port = config().server.port.value,
                 preWait = config().server.preWait,
-                module = inboundMessageModule(deps.meterRegistry)
+                module = inboundModule(deps.meterRegistry)
             )
 
             awaitCancellation()
@@ -33,7 +33,7 @@ fun main() = SuspendApp {
         .onFailure { error -> if (error !is CancellationException) logError(error) }
 }
 
-internal fun inboundMessageModule(
+internal fun inboundModule(
     meterRegistry: PrometheusMeterRegistry
 ): Application.() -> Unit {
     return {
