@@ -1,4 +1,4 @@
-package no.nav.helsemelding.inboundmessage.plugin
+package no.nav.helsemelding.inbound.plugin
 
 import io.ktor.server.application.Application
 import io.ktor.server.application.install

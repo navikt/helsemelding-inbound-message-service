@@ -1,4 +1,4 @@
-package no.nav.helsemelding.inboundmessage
+package no.nav.helsemelding.inbound
 
 import arrow.fx.coroutines.ExitCase
 import arrow.fx.coroutines.ResourceScope

@@ -1,4 +1,4 @@
-package no.nav.helsemelding.inboundmessage.config
+package no.nav.helsemelding.inbound.config
 
 import kotlin.time.Duration
 

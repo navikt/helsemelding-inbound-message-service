@@ -1,10 +1,10 @@
-package no.nav.helsemelding.inboundmessage
+package no.nav.helsemelding.inbound
 
 import arrow.core.memoize
 import com.sksamuel.hoplite.ConfigLoader
 import com.sksamuel.hoplite.ExperimentalHoplite
 import com.sksamuel.hoplite.addResourceSource
-import no.nav.helsemelding.inboundmessage.config.Config
+import no.nav.helsemelding.inbound.config.Config
 
 @OptIn(ExperimentalHoplite::class)
 val config: () -> Config = {

@@ -1,4 +1,4 @@
-package no.nav.helsemelding.inboundmessage
+package no.nav.helsemelding.inbound
 
 import arrow.continuations.SuspendApp
 import arrow.continuations.ktor.server
@@ -10,8 +10,8 @@ import io.ktor.server.netty.Netty
 import io.ktor.utils.io.CancellationException
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import kotlinx.coroutines.awaitCancellation
-import no.nav.helsemelding.inboundmessage.plugin.configureMetrics
-import no.nav.helsemelding.inboundmessage.plugin.configureRoutes
+import no.nav.helsemelding.inbound.plugin.configureMetrics
+import no.nav.helsemelding.inbound.plugin.configureRoutes
 
 private val log = KotlinLogging.logger {}
 

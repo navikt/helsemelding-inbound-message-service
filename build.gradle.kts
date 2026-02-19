@@ -77,5 +77,5 @@ dependencies {
 }
 
 application {
-    mainClass.set("no.nav.helsemelding.inboundmessage.AppKt")
+    mainClass.set("no.nav.helsemelding.inbound.AppKt")
 }
