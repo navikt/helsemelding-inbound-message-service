@@ -15,7 +15,7 @@ import no.nav.helsemelding.ediadapter.model.PostMessageRequest
 import no.nav.helsemelding.ediadapter.model.StatusInfo
 import kotlin.uuid.Uuid
 
-const val FAGSYSTEM_HERID = 8142519
+const val FAGSYSTEM_HER_ID = 8142519
 
 class FakeEdiAdapterClient : EdiAdapterClient {
     private val messageById = mutableMapOf<Uuid, Either<ErrorMessage, Message>>()
@@ -67,7 +67,7 @@ class FakeEdiAdapterClient : EdiAdapterClient {
         val messages = List(getMessagesRequest.messagesToFetch) {
             Message(
                 id = Uuid.random(),
-                receiverHerId = FAGSYSTEM_HERID,
+                receiverHerId = FAGSYSTEM_HER_ID,
                 isAppRec = false
             )
         }
