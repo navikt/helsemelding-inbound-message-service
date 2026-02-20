@@ -61,6 +61,9 @@ spec:
         mountPath: /secret/serviceuser
   accessPolicy:
     outbound:
+      rules:
+        - application: edi-adapter
+          cluster: dev-gcp
     inbound:
       rules:
         - application: azure-token-generator

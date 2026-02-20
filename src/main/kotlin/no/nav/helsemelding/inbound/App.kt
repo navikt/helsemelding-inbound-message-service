@@ -4,6 +4,7 @@ import arrow.continuations.SuspendApp
 import arrow.continuations.ktor.server
 import arrow.core.raise.result
 import arrow.fx.coroutines.resourceScope
+import arrow.resilience.Schedule
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.server.application.Application
 import io.ktor.server.netty.Netty
@@ -12,6 +13,7 @@ import io.micrometer.prometheus.PrometheusMeterRegistry
 import kotlinx.coroutines.awaitCancellation
 import no.nav.helsemelding.inbound.plugin.configureMetrics
 import no.nav.helsemelding.inbound.plugin.configureRoutes
+import no.nav.helsemelding.inbound.service.PollerService
 
 private val log = KotlinLogging.logger {}
 
@@ -27,6 +29,10 @@ fun main() = SuspendApp {
                 module = inboundModule(deps.meterRegistry)
             )
 
+            val poller = PollerService(deps.ediAdapterClient)
+
+            scheduleProcessMessages(poller)
+
             awaitCancellation()
         }
     }
@@ -41,5 +47,10 @@ internal fun inboundModule(
         configureRoutes(meterRegistry)
     }
 }
+
+private suspend fun scheduleProcessMessages(processor: PollerService): Long =
+    Schedule
+        .spaced<Unit>(config().poller.scheduleInterval)
+        .repeat { processor.pollMessages() }
 
 private fun logError(t: Throwable) = log.error { "Shutdown inbound-message-service due to: ${t.stackTraceToString()}" }
