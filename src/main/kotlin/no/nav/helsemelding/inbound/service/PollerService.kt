@@ -12,6 +12,7 @@ import no.nav.helsemelding.ediadapter.model.GetMessagesRequest
 import no.nav.helsemelding.ediadapter.model.Message
 import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.util.withSpan
+import kotlin.uuid.Uuid
 
 private val log = KotlinLogging.logger {}
 private val tracer = GlobalOpenTelemetry.getTracer("PollerService")
@@ -45,7 +46,6 @@ class PollerService(
                 messages.value
                     .filter { it.id != null }
                     .filter { it.receiverHerId != null }
-                    .filter { it.isAppRec == false }
 
             is Left<ErrorMessage> -> {
                 log.error { "Failed to get messages for herId: $herId. Error: ${messages.value}" }
@@ -66,7 +66,27 @@ class PollerService(
     internal suspend fun processMessage(message: Message): Boolean {
         return tracer.withSpan("Process incoming message") {
             log.info { "Processing message: ${message.id}" }
-            true
+            when (message.isAppRec) {
+                true -> {
+                    log.info { "Processing apprec: ${message.id}" }
+                    markMessageAsRead(message.id!!, message.receiverHerId!!)
+                }
+                else -> false
+            }
+        }
+    }
+
+    private suspend fun markMessageAsRead(messageId: Uuid, herId: Int): Boolean {
+        return when (val either = ediAdapterClient.markMessageAsRead(messageId, herId)) {
+            is Right<Boolean> -> {
+                log.info { "Successfully marked message: $messageId as read." }
+                either.value
+            }
+
+            is Left<ErrorMessage> -> {
+                log.error { "Failed to mark message: $messageId as read. Error: ${either.value}" }
+                false
+            }
         }
     }
 
