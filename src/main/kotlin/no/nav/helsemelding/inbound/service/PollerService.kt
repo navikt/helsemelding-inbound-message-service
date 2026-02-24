@@ -69,6 +69,7 @@ class PollerService(
             when (message.isAppRec) {
                 true -> {
                     log.info { "Processing apprec: ${message.id}" }
+                    // TODO: Can be removed when outbound-message-service handles apprec
                     markMessageAsRead(message.id!!, message.receiverHerId!!)
                 }
                 else -> false
