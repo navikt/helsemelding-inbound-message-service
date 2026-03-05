@@ -25,6 +25,7 @@ dependencyResolutionManagement {
             version("logstash", "7.4")
             version("opentelemetry-mdc", "2.24.0-alpha")
             version("opentelemetry-extension-kotlin", "1.58.0")
+            version("kotlin-kafka", "0.4.1")
             version("edi-adapter-client", "0.0.5")
 
             library("arrow-core", "io.arrow-kt", "arrow-core").versionRef("arrow")
@@ -63,6 +64,8 @@ dependencyResolutionManagement {
 
             library("opentelemetry-logback-mdc", "io.opentelemetry.instrumentation", "opentelemetry-logback-mdc-1.0").versionRef("opentelemetry-mdc")
             library("opentelemetry-extension-kotlin", "io.opentelemetry", "opentelemetry-extension-kotlin").versionRef("opentelemetry-extension-kotlin")
+
+            library("kotlin-kafka", "io.github.nomisrev", "kotlin-kafka").versionRef("kotlin-kafka")
 
             library("edi-adapter-client", "no.nav.helsemelding", "edi-adapter-client").versionRef("edi-adapter-client")
 

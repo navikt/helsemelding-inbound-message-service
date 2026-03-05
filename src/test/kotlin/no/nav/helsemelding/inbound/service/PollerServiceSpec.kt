@@ -8,6 +8,7 @@ import io.kotest.data.row
 import io.kotest.matchers.shouldBe
 import no.nav.helsemelding.ediadapter.model.ErrorMessage
 import no.nav.helsemelding.ediadapter.model.Message
+import no.nav.helsemelding.inbound.publisher.FakeMessagePublisher
 import no.nav.helsemelding.inbound.util.FAGSYSTEM_HER_ID
 import no.nav.helsemelding.inbound.util.FakeEdiAdapterClient
 import kotlin.uuid.Uuid
@@ -18,7 +19,9 @@ class PollerServiceSpec : StringSpec(
             val uuid = Uuid.random()
             val ediAdapterClient = FakeEdiAdapterClient()
             ediAdapterClient.givenMarkAsRead(uuid, Right(true))
-            val pollerService = PollerService(ediAdapterClient)
+
+            val fakeMessagePublisher = FakeMessagePublisher()
+            val pollerService = PollerService(ediAdapterClient, fakeMessagePublisher)
 
             val message = Message(
                 id = uuid,
@@ -37,7 +40,9 @@ class PollerServiceSpec : StringSpec(
                 val uuid = Uuid.random()
                 val ediAdapterClient = FakeEdiAdapterClient()
                 ediAdapterClient.givenMarkAsRead(uuid, Right(true))
-                val pollerService = PollerService(ediAdapterClient)
+
+                val fakeMessagePublisher = FakeMessagePublisher()
+                val pollerService = PollerService(ediAdapterClient, fakeMessagePublisher)
 
                 val message = Message(
                     id = uuid,
@@ -59,7 +64,9 @@ class PollerServiceSpec : StringSpec(
                 requestId = Uuid.random().toString()
             )
             ediAdapterClient.givenMarkAsRead(uuid, Either.Left(errorMessage500))
-            val pollerService = PollerService(ediAdapterClient)
+
+            val fakeMessagePublisher = FakeMessagePublisher()
+            val pollerService = PollerService(ediAdapterClient, fakeMessagePublisher)
 
             val message = Message(
                 id = uuid,

@@ -8,9 +8,11 @@ import io.opentelemetry.api.GlobalOpenTelemetry
 import kotlinx.coroutines.Dispatchers
 import no.nav.helsemelding.ediadapter.client.EdiAdapterClient
 import no.nav.helsemelding.ediadapter.model.ErrorMessage
+import no.nav.helsemelding.ediadapter.model.GetBusinessDocumentResponse
 import no.nav.helsemelding.ediadapter.model.GetMessagesRequest
 import no.nav.helsemelding.ediadapter.model.Message
 import no.nav.helsemelding.inbound.config
+import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.withSpan
 import kotlin.uuid.Uuid
 
@@ -18,7 +20,8 @@ private val log = KotlinLogging.logger {}
 private val tracer = GlobalOpenTelemetry.getTracer("PollerService")
 
 class PollerService(
-    private val ediAdapterClient: EdiAdapterClient
+    private val ediAdapterClient: EdiAdapterClient,
+    private val messagePublisher: MessagePublisher
 ) {
     private val pollerConfig = config().poller
 
@@ -70,9 +73,22 @@ class PollerService(
                 true -> {
                     log.info { "Processing apprec: ${message.id}" }
                     // TODO: Can be removed when outbound-message-service handles apprec
+                    log.info { "Mark apprec as read: ${message.id}" }
                     markMessageAsRead(message.id!!, message.receiverHerId!!)
                 }
-                else -> false
+                else -> {
+                    log.info { "Processing incoming message: ${message.id}" }
+
+                    val businessDocument = getBusinessDocument(message.id!!)
+                    if (businessDocument != null) {
+                        val isPublishingSuccessful = publishMessageToKafka(message.id!!, businessDocument)
+                        if (isPublishingSuccessful) {
+                            log.info { "Mark message as read: ${message.id}" }
+                            markMessageAsRead(message.id!!, message.receiverHerId!!)
+                        }
+                    }
+                    false
+                }
             }
         }
     }
@@ -89,6 +105,34 @@ class PollerService(
                 false
             }
         }
+    }
+
+    private suspend fun getBusinessDocument(messageId: Uuid): String? {
+        return when (val response = ediAdapterClient.getBusinessDocument(messageId)) {
+            is Right<GetBusinessDocumentResponse> -> {
+                log.info { "Retrieved business document for message: $messageId" }
+                response.value.businessDocument
+            }
+            is Left<ErrorMessage> -> {
+                log.error { "Failed to retrieve business document for message: $messageId: ${response.value.error} Stack trace: ${response.value.stackTrace}" }
+                null
+            }
+        }
+    }
+
+    private suspend fun publishMessageToKafka(messageId: Uuid, businessDocument: String): Boolean {
+        val key = messageId.toString()
+        val payload = businessDocument.toByteArray()
+
+        return messagePublisher.publish(key, payload)
+            .map {
+                log.info { "Successfully published message $key to Kafka." }
+                true
+            }
+            .getOrElse { t ->
+                log.error { "Failed to publish message $key: ${t.stackTraceToString()}" }
+                false
+            }
     }
 
     private fun List<Message>.withLogging(): List<Message> = also {

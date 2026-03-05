@@ -27,10 +27,16 @@ Relevant configuration for adjusting the frequency of scheduler and how many mes
 
 To run this locally (meaning without actually sending any HTTP requests) change the following in App.kt:
 ```kotlin
-val poller = PollerService(deps.ediAdapterClient)
+val poller = PollerService(
+    deps.ediAdapterClient,
+    DialogMessagePublisher(deps.kafkaPublisher)
+)
 ```
 
 to use `FakeEdiAdapterClient` instead:
 ```kotlin
-val poller = PollerService(FakeEdiAdapterClient())
+val poller = PollerService(
+    FakeEdiAdapterClient(),
+    FakeMessagePublisher()
+)
 ```
