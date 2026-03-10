@@ -14,6 +14,7 @@ import no.nav.helsemelding.ediadapter.model.Message
 import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.withSpan
+import java.util.Base64
 import kotlin.uuid.Uuid
 
 private val log = KotlinLogging.logger {}
@@ -122,7 +123,7 @@ class PollerService(
 
     private suspend fun publishMessageToKafka(messageId: Uuid, businessDocument: String): Boolean {
         val key = messageId.toString()
-        val payload = businessDocument.toByteArray()
+        val payload = Base64.getDecoder().decode(businessDocument)
 
         return messagePublisher.publish(key, payload)
             .map {
