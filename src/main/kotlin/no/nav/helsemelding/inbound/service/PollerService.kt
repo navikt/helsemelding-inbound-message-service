@@ -86,9 +86,14 @@ class PollerService(
                         if (isPublishingSuccessful) {
                             log.info { "Mark message as read: ${message.id}" }
                             markMessageAsRead(message.id!!, message.receiverHerId!!)
+                        } else {
+                            log.error { "Failed to publish message to Kafka: ${message.id}. Skipping the message!" }
+                            false
                         }
+                    } else {
+                        log.error { "Failed to get business document for message: ${message.id}. Skipping the message!" }
+                        false
                     }
-                    false
                 }
             }
         }

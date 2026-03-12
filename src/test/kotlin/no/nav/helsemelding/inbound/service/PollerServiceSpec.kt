@@ -1,16 +1,13 @@
 package no.nav.helsemelding.inbound.service
 
-import arrow.core.Either
 import arrow.core.Either.Right
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.data.forAll
-import io.kotest.data.row
 import io.kotest.matchers.shouldBe
-import no.nav.helsemelding.ediadapter.model.ErrorMessage
+import io.kotest.matchers.shouldNotBe
+import no.nav.helsemelding.ediadapter.model.GetBusinessDocumentResponse
 import no.nav.helsemelding.ediadapter.model.Message
-import no.nav.helsemelding.inbound.publisher.FakeMessagePublisher
-import no.nav.helsemelding.inbound.util.FAGSYSTEM_HER_ID
-import no.nav.helsemelding.inbound.util.FakeEdiAdapterClient
+import no.nav.helsemelding.inbound.FakeMessagePublisher
+import java.util.Base64
 import kotlin.uuid.Uuid
 
 class PollerServiceSpec : StringSpec(
@@ -32,49 +29,42 @@ class PollerServiceSpec : StringSpec(
             pollerService.processMessage(message) shouldBe true
         }
 
-        "message should not be processed if it's not an apprec" {
-            forAll(
-                row(null),
-                row(false)
-            ) { isApprec ->
-                val uuid = Uuid.random()
-                val ediAdapterClient = FakeEdiAdapterClient()
-                ediAdapterClient.givenMarkAsRead(uuid, Right(true))
-
-                val fakeMessagePublisher = FakeMessagePublisher()
-                val pollerService = PollerService(ediAdapterClient, fakeMessagePublisher)
-
-                val message = Message(
-                    id = uuid,
-                    isAppRec = isApprec,
-                    receiverHerId = FAGSYSTEM_HER_ID
-                )
-
-                pollerService.processMessage(message) shouldBe false
-            }
-        }
-
-        "message should not be processed if ediAdapterClient returns error" {
+        "message should be processed if it's an incoming message" {
             val uuid = Uuid.random()
+
+            val xml = "<dialogmelding>hello</dialogmelding>"
+            val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
+
             val ediAdapterClient = FakeEdiAdapterClient()
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                Right(
+                    GetBusinessDocumentResponse(
+                        businessDocument = encoded,
+                        contentType = "application/xml",
+                        contentTransferEncoding = "base64"
 
-            val errorMessage500 = ErrorMessage(
-                error = "Internal Server Error",
-                errorCode = 1000,
-                requestId = Uuid.random().toString()
+                    )
+                )
             )
-            ediAdapterClient.givenMarkAsRead(uuid, Either.Left(errorMessage500))
 
-            val fakeMessagePublisher = FakeMessagePublisher()
-            val pollerService = PollerService(ediAdapterClient, fakeMessagePublisher)
+            val publisher = FakeMessagePublisher()
+
+            val pollerService = PollerService(ediAdapterClient, publisher)
 
             val message = Message(
                 id = uuid,
-                isAppRec = true,
+                isAppRec = false,
                 receiverHerId = FAGSYSTEM_HER_ID
             )
 
-            pollerService.processMessage(message) shouldBe false
+            val result = pollerService.processMessage(message)
+
+            result shouldBe true
+            publisher.publishedKey shouldNotBe null
+            publisher.publishedPayload shouldNotBe null
+
+            publisher.publishedKey shouldBe uuid.toString()
+            String(publisher.publishedPayload!!) shouldBe xml
         }
     }
 )

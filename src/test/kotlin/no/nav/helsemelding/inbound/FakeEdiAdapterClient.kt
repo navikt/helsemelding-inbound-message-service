@@ -1,4 +1,4 @@
-package no.nav.helsemelding.inbound.util
+package no.nav.helsemelding.inbound.service
 
 import arrow.core.Either
 import arrow.core.Either.Left
@@ -22,9 +22,11 @@ class FakeEdiAdapterClient : EdiAdapterClient {
     private val postApprecById = mutableMapOf<Uuid, Either<ErrorMessage, Metadata>>()
     private val markAsReadById = mutableMapOf<Uuid, Either<ErrorMessage, Boolean>>()
 
+    private var getBusinessDocumentResponse: Either<ErrorMessage, GetBusinessDocumentResponse>? = null
+
     val errorMessage404 = ErrorMessage(
         error = "Not Found",
-        errorCode = 1000,
+        errorCode = 404,
         requestId = Uuid.random().toString()
     )
 
@@ -32,19 +34,15 @@ class FakeEdiAdapterClient : EdiAdapterClient {
         markAsReadById[id] = isMarked
     }
 
-    fun givenPostApprec(
-        id: Uuid,
-        apprecResponse: Either<ErrorMessage, Metadata>
-    ) {
-        postApprecById[id] = apprecResponse
+    fun givenGetBusinessDocumentResponse(response: Either<ErrorMessage, GetBusinessDocumentResponse>) {
+        getBusinessDocumentResponse = response
     }
 
     override suspend fun getMessageStatus(id: Uuid): Either<ErrorMessage, List<StatusInfo>> = Right(emptyList())
 
     override suspend fun getMessage(id: Uuid): Either<ErrorMessage, Message> = Left(errorMessage404)
 
-    override suspend fun getBusinessDocument(id: Uuid): Either<ErrorMessage, GetBusinessDocumentResponse> =
-        Left(errorMessage404)
+    override suspend fun getBusinessDocument(id: Uuid): Either<ErrorMessage, GetBusinessDocumentResponse> = getBusinessDocumentResponse!!
 
     override suspend fun postApprec(
         id: Uuid,
