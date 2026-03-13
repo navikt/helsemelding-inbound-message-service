@@ -3,7 +3,11 @@
 Application responsible for processing incoming messages to NAV
 
 Overview:
-- Poll for new messages
+- Poll for new messages and process them one by one:
+  - If the message is an apprec - mark message as read.
+  - If the message is an incoming message - get business document for this message.
+    - If the business document is retrieve - decode it and send to Kafka.
+      - if the message is successfully sent to Kafka - mark the message as read.
 
 ## Local development
 
