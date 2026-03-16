@@ -69,29 +69,32 @@ class PollerService(
 
     internal suspend fun processMessage(message: Message): Boolean {
         return tracer.withSpan("Process incoming message") {
-            log.info { "Processing message: ${message.id}" }
+            val messageId = requireNotNull(message.id)
+            val receiverHerId = requireNotNull(message.receiverHerId)
+
+            log.info { "Processing message: $messageId" }
             when (message.isAppRec) {
                 true -> {
-                    log.info { "Processing apprec: ${message.id}" }
+                    log.info { "Processing apprec: $messageId" }
+
                     // TODO: Can be removed when outbound-message-service handles apprec
-                    log.info { "Mark apprec as read: ${message.id}" }
-                    markMessageAsRead(message.id!!, message.receiverHerId!!)
+                    markMessageAsRead(messageId, receiverHerId)
                 }
                 else -> {
-                    log.info { "Processing incoming message: ${message.id}" }
+                    log.info { "Processing incoming message: $messageId" }
 
-                    val businessDocument = getBusinessDocument(message.id!!)
+                    val businessDocument = getBusinessDocument(messageId)
                     if (businessDocument != null) {
-                        val isPublishingSuccessful = publishMessageToKafka(message.id!!, businessDocument)
+                        val isPublishingSuccessful = publishMessageToKafka(messageId, businessDocument)
                         if (isPublishingSuccessful) {
-                            log.info { "Mark message as read: ${message.id}" }
-                            markMessageAsRead(message.id!!, message.receiverHerId!!)
+                            log.info { "Mark message as read: $messageId" }
+                            markMessageAsRead(messageId, receiverHerId)
                         } else {
-                            log.error { "Failed to publish message to Kafka: ${message.id}. Skipping the message!" }
+                            log.error { "Failed to publish message to Kafka: $messageId. Skipping the message!" }
                             false
                         }
                     } else {
-                        log.error { "Failed to get business document for message: ${message.id}. Skipping the message!" }
+                        log.error { "Failed to get business document for message: $messageId. Skipping the message!" }
                         false
                     }
                 }
