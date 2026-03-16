@@ -5,7 +5,6 @@ import arrow.core.Either.Left
 import arrow.core.Either.Right
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.shouldNotBe
 import no.nav.helsemelding.ediadapter.model.ErrorMessage
 import no.nav.helsemelding.ediadapter.model.GetBusinessDocumentResponse
 import no.nav.helsemelding.ediadapter.model.Message
@@ -63,7 +62,7 @@ class PollerServiceSpec : StringSpec(
         "Incoming message should be processed" {
             val uuid = Uuid.random()
 
-            val xml = readFileToString("businessDocument.xml")
+            val xml = readFileToString("incomingDialogMessage.xml")
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
 
             ediAdapterClient.givenGetBusinessDocumentResponse(
@@ -88,8 +87,6 @@ class PollerServiceSpec : StringSpec(
             val result = pollerService.processMessage(message)
 
             result shouldBe true
-            publisher.publishedKey shouldNotBe null
-            publisher.publishedPayload shouldNotBe null
 
             publisher.publishedKey shouldBe uuid.toString()
             String(publisher.publishedPayload!!) shouldBe xml
@@ -122,7 +119,7 @@ class PollerServiceSpec : StringSpec(
         "Incoming message should not be processed if publishing to Kafka fails" {
             val uuid = Uuid.random()
 
-            val xml = readFileToString("businessDocument.xml")
+            val xml = readFileToString("incomingDialogMessage.xml")
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
 
             ediAdapterClient.givenGetBusinessDocumentResponse(
@@ -149,7 +146,7 @@ class PollerServiceSpec : StringSpec(
         "Incoming message should not be processed if marking as read fails" {
             val uuid = Uuid.random()
 
-            val xml = readFileToString("businessDocument.xml")
+            val xml = readFileToString("incomingDialogMessage.xml")
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
 
             ediAdapterClient.givenGetBusinessDocumentResponse(
