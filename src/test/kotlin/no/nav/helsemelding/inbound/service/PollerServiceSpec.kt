@@ -1,6 +1,5 @@
 package no.nav.helsemelding.inbound.service
 
-import arrow.core.Either
 import arrow.core.Either.Left
 import arrow.core.Either.Right
 import io.kotest.core.spec.style.StringSpec
@@ -13,6 +12,8 @@ import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
 import java.util.Base64
 import kotlin.uuid.Uuid
+
+const val FAGSYSTEM_HER_ID = 8142519
 
 class PollerServiceSpec : StringSpec(
     {
@@ -29,7 +30,7 @@ class PollerServiceSpec : StringSpec(
         "Apprec should be processed" {
             val uuid = Uuid.random()
 
-            ediAdapterClient.givenMarkAsRead(uuid, Right(true))
+            ediAdapterClient.givenMarkAsRead(Right(true))
 
             val message = Message(
                 id = uuid,
@@ -48,7 +49,7 @@ class PollerServiceSpec : StringSpec(
                 errorCode = 500,
                 requestId = Uuid.random().toString()
             )
-            ediAdapterClient.givenMarkAsRead(uuid, Left(errorMessage500))
+            ediAdapterClient.givenMarkAsRead(Left(errorMessage500))
 
             val message = Message(
                 id = uuid,
@@ -75,6 +76,7 @@ class PollerServiceSpec : StringSpec(
                     )
                 )
             )
+            ediAdapterClient.givenMarkAsRead(Right(true))
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
@@ -164,7 +166,7 @@ class PollerServiceSpec : StringSpec(
                 errorCode = 500,
                 requestId = Uuid.random().toString()
             )
-            ediAdapterClient.givenMarkAsRead(uuid, Either.Left(errorMessage500))
+            ediAdapterClient.givenMarkAsRead(Left(errorMessage500))
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 

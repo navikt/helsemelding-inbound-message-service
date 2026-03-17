@@ -2,7 +2,6 @@ package no.nav.helsemelding.inbound.service
 
 import arrow.core.Either
 import arrow.core.Either.Left
-import arrow.core.Either.Right
 import no.nav.helsemelding.ediadapter.client.EdiAdapterClient
 import no.nav.helsemelding.ediadapter.model.ApprecInfo
 import no.nav.helsemelding.ediadapter.model.ErrorMessage
@@ -15,14 +14,9 @@ import no.nav.helsemelding.ediadapter.model.PostMessageRequest
 import no.nav.helsemelding.ediadapter.model.StatusInfo
 import kotlin.uuid.Uuid
 
-const val FAGSYSTEM_HER_ID = 8142519
-
 class FakeEdiAdapterClient : EdiAdapterClient {
-    private val messageById = mutableMapOf<Uuid, Either<ErrorMessage, Message>>()
-    private val postApprecById = mutableMapOf<Uuid, Either<ErrorMessage, Metadata>>()
-    private val markAsReadById = mutableMapOf<Uuid, Either<ErrorMessage, Boolean>>()
-
     private var getBusinessDocumentResponse: Either<ErrorMessage, GetBusinessDocumentResponse>? = null
+    private var markMessageAsReadResponse: Either<ErrorMessage, Boolean>? = null
 
     val errorMessage404 = ErrorMessage(
         error = "Not Found",
@@ -30,15 +24,15 @@ class FakeEdiAdapterClient : EdiAdapterClient {
         requestId = Uuid.random().toString()
     )
 
-    fun givenMarkAsRead(id: Uuid, isMarked: Either<ErrorMessage, Boolean>) {
-        markAsReadById[id] = isMarked
+    fun givenMarkAsRead(isMarked: Either<ErrorMessage, Boolean>) {
+        markMessageAsReadResponse = isMarked
     }
 
     fun givenGetBusinessDocumentResponse(response: Either<ErrorMessage, GetBusinessDocumentResponse>) {
         getBusinessDocumentResponse = response
     }
 
-    override suspend fun getMessageStatus(id: Uuid): Either<ErrorMessage, List<StatusInfo>> = Right(emptyList())
+    override suspend fun getMessageStatus(id: Uuid): Either<ErrorMessage, List<StatusInfo>> = Left(errorMessage404)
 
     override suspend fun getMessage(id: Uuid): Either<ErrorMessage, Message> = Left(errorMessage404)
 
@@ -48,30 +42,14 @@ class FakeEdiAdapterClient : EdiAdapterClient {
         id: Uuid,
         apprecSenderHerId: Int,
         postAppRecRequest: PostAppRecRequest
-    ): Either<ErrorMessage, Metadata> {
-        return postApprecById[id] ?: when (messageById[id]) {
-            is Right -> Right(Metadata(Uuid.random(), ""))
-            else -> Left(errorMessage404)
-        }
-    }
+    ): Either<ErrorMessage, Metadata> = Left(errorMessage404)
 
-    override suspend fun markMessageAsRead(id: Uuid, herId: Int): Either<ErrorMessage, Boolean> =
-        markAsReadById[id] ?: Right(true)
+    override suspend fun markMessageAsRead(id: Uuid, herId: Int): Either<ErrorMessage, Boolean> = markMessageAsReadResponse!!
 
-    override suspend fun getApprecInfo(id: Uuid): Either<ErrorMessage, List<ApprecInfo>> =
-        Right(emptyList())
+    override suspend fun getApprecInfo(id: Uuid): Either<ErrorMessage, List<ApprecInfo>> = Left(errorMessage404)
 
-    override suspend fun getMessages(getMessagesRequest: GetMessagesRequest): Either<ErrorMessage, List<Message>> {
-        val messages = List(getMessagesRequest.messagesToFetch) {
-            Message(
-                id = Uuid.random(),
-                receiverHerId = FAGSYSTEM_HER_ID,
-                isAppRec = false
-            )
-        }
-        messages.forEach { messageById[it.id!!] = Right(it) }
-        return Right(messages)
-    }
+    override suspend fun getMessages(getMessagesRequest: GetMessagesRequest): Either<ErrorMessage, List<Message>> =
+        Left(errorMessage404)
 
     override suspend fun postMessage(postMessagesRequest: PostMessageRequest): Either<ErrorMessage, Metadata> =
         Left(errorMessage404)
