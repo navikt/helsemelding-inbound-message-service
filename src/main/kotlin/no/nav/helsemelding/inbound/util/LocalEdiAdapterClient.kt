@@ -14,6 +14,7 @@ import no.nav.helsemelding.ediadapter.model.PostAppRecRequest
 import no.nav.helsemelding.ediadapter.model.PostMessageRequest
 import no.nav.helsemelding.ediadapter.model.StatusInfo
 import java.util.Base64
+import kotlin.random.Random
 import kotlin.uuid.Uuid
 
 const val FAGSYSTEM_HER_ID = 8142519
@@ -53,18 +54,14 @@ class LocalEdiAdapterClient : EdiAdapterClient {
     override suspend fun getApprecInfo(id: Uuid): Either<ErrorMessage, List<ApprecInfo>> = Left(errorMessage404)
 
     override suspend fun getMessages(getMessagesRequest: GetMessagesRequest): Either<ErrorMessage, List<Message>> {
-        val messages = listOf(
+        val messages = List(getMessagesRequest.messagesToFetch) {
             Message(
                 id = Uuid.random(),
                 receiverHerId = FAGSYSTEM_HER_ID,
-                isAppRec = false
-            ),
-            Message(
-                id = Uuid.random(),
-                receiverHerId = FAGSYSTEM_HER_ID,
-                isAppRec = true
+                isAppRec = Random.nextBoolean()
             )
-        )
+        }
+
         return Right(messages)
     }
 
