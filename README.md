@@ -6,7 +6,7 @@ Overview:
 - Poll for new messages and process them one by one:
   - If the message is an apprec - mark message as read.
   - If the message is an incoming message - get business document for this message.
-    - If the business document is retrieve - decode it and send to Kafka.
+    - If the business document is retrieved - decode it from Base64 string and send to Kafka.
       - if the message is successfully sent to Kafka - mark the message as read.
 
 ## Local development
@@ -31,16 +31,14 @@ Relevant configuration for adjusting the frequency of scheduler and how many mes
 
 To run this locally (meaning without actually sending any HTTP requests) change the following in App.kt:
 ```kotlin
-val poller = PollerService(
-    deps.ediAdapterClient,
-    DialogMessagePublisher(deps.kafkaPublisher)
-)
+val dialogMessagePublisher = DialogMessagePublisher(deps.kafkaPublisher)
+val poller = PollerService(deps.ediAdapterClient, dialogMessagePublisher)
 ```
 
-to use `FakeEdiAdapterClient` instead:
+to use `LocalEdiAdapterClient` and `LocalMessagePublisher` instead:
 ```kotlin
 val poller = PollerService(
-    FakeEdiAdapterClient(),
-    FakeMessagePublisher()
+    LocalEdiAdapterClient(),
+    LocalMessagePublisher()
 )
 ```

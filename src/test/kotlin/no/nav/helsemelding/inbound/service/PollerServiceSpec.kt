@@ -62,7 +62,7 @@ class PollerServiceSpec : StringSpec(
         "Incoming message should be processed" {
             val uuid = Uuid.random()
 
-            val xml = readFileToString("incomingDialogMessage.xml")
+            val xml = readFileToString("message/incomingDialogMessage.xml")
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
 
             ediAdapterClient.givenGetBusinessDocumentResponse(
@@ -119,7 +119,7 @@ class PollerServiceSpec : StringSpec(
         "Incoming message should not be processed if publishing to Kafka fails" {
             val uuid = Uuid.random()
 
-            val xml = readFileToString("incomingDialogMessage.xml")
+            val xml = readFileToString("message/incomingDialogMessage.xml")
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
 
             ediAdapterClient.givenGetBusinessDocumentResponse(
@@ -146,7 +146,7 @@ class PollerServiceSpec : StringSpec(
         "Incoming message should not be processed if marking as read fails" {
             val uuid = Uuid.random()
 
-            val xml = readFileToString("incomingDialogMessage.xml")
+            val xml = readFileToString("message/incomingDialogMessage.xml")
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
 
             ediAdapterClient.givenGetBusinessDocumentResponse(
