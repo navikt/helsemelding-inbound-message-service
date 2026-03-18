@@ -13,7 +13,7 @@ interface MessagePublisher {
 }
 
 class DialogMessagePublisher(
-    private val kafkaPublisher: KafkaPublisher<String?, ByteArray>
+    private val kafkaPublisher: KafkaPublisher<String, ByteArray>
 ) : MessagePublisher {
 
     override suspend fun publish(key: String, payload: ByteArray): Result<RecordMetadata> {

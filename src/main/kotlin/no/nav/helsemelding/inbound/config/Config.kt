@@ -72,7 +72,7 @@ data class Kafka(
     @JvmInline
     value class TruststoreLocation(val value: String)
 
-    fun toPublisherSettings(): PublisherSettings<String?, ByteArray> =
+    fun toPublisherSettings(): PublisherSettings<String, ByteArray> =
         PublisherSettings(
             bootstrapServers = bootstrapServers,
             keySerializer = StringSerializer(),
