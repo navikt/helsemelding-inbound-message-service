@@ -13,6 +13,7 @@ import io.micrometer.prometheus.PrometheusMeterRegistry
 import kotlinx.coroutines.awaitCancellation
 import no.nav.helsemelding.inbound.plugin.configureMetrics
 import no.nav.helsemelding.inbound.plugin.configureRoutes
+import no.nav.helsemelding.inbound.publisher.DialogMessagePublisher
 import no.nav.helsemelding.inbound.service.PollerService
 
 private val log = KotlinLogging.logger {}
@@ -29,7 +30,8 @@ fun main() = SuspendApp {
                 module = inboundModule(deps.meterRegistry)
             )
 
-            val poller = PollerService(deps.ediAdapterClient)
+            val dialogMessagePublisher = DialogMessagePublisher(deps.kafkaPublisher)
+            val poller = PollerService(deps.ediAdapterClient, dialogMessagePublisher)
 
             scheduleProcessMessages(poller)
 

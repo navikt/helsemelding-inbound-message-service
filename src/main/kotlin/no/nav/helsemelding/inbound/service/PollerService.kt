@@ -8,17 +8,21 @@ import io.opentelemetry.api.GlobalOpenTelemetry
 import kotlinx.coroutines.Dispatchers
 import no.nav.helsemelding.ediadapter.client.EdiAdapterClient
 import no.nav.helsemelding.ediadapter.model.ErrorMessage
+import no.nav.helsemelding.ediadapter.model.GetBusinessDocumentResponse
 import no.nav.helsemelding.ediadapter.model.GetMessagesRequest
 import no.nav.helsemelding.ediadapter.model.Message
 import no.nav.helsemelding.inbound.config
+import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.withSpan
+import java.util.Base64
 import kotlin.uuid.Uuid
 
 private val log = KotlinLogging.logger {}
 private val tracer = GlobalOpenTelemetry.getTracer("PollerService")
 
 class PollerService(
-    private val ediAdapterClient: EdiAdapterClient
+    private val ediAdapterClient: EdiAdapterClient,
+    private val messagePublisher: MessagePublisher
 ) {
     private val pollerConfig = config().poller
 
@@ -65,14 +69,35 @@ class PollerService(
 
     internal suspend fun processMessage(message: Message): Boolean {
         return tracer.withSpan("Process incoming message") {
-            log.info { "Processing message: ${message.id}" }
+            val messageId = requireNotNull(message.id)
+            val receiverHerId = requireNotNull(message.receiverHerId)
+
+            log.info { "Processing message: $messageId" }
             when (message.isAppRec) {
                 true -> {
-                    log.info { "Processing apprec: ${message.id}" }
+                    log.info { "Processing apprec: $messageId" }
+
                     // TODO: Can be removed when outbound-message-service handles apprec
-                    markMessageAsRead(message.id!!, message.receiverHerId!!)
+                    markMessageAsRead(messageId, receiverHerId)
                 }
-                else -> false
+                else -> {
+                    log.info { "Processing incoming message: $messageId" }
+
+                    val businessDocument = getBusinessDocument(messageId)
+                    if (businessDocument != null) {
+                        val isPublishingSuccessful = publishMessageToKafka(messageId, businessDocument)
+                        if (isPublishingSuccessful) {
+                            log.info { "Mark message as read: $messageId" }
+                            markMessageAsRead(messageId, receiverHerId)
+                        } else {
+                            log.error { "Failed to publish message to Kafka: $messageId. Skipping the message!" }
+                            false
+                        }
+                    } else {
+                        log.error { "Failed to get business document for message: $messageId. Skipping the message!" }
+                        false
+                    }
+                }
             }
         }
     }
@@ -89,6 +114,34 @@ class PollerService(
                 false
             }
         }
+    }
+
+    private suspend fun getBusinessDocument(messageId: Uuid): String? {
+        return when (val response = ediAdapterClient.getBusinessDocument(messageId)) {
+            is Right<GetBusinessDocumentResponse> -> {
+                log.info { "Retrieved business document for message: $messageId" }
+                response.value.businessDocument
+            }
+            is Left<ErrorMessage> -> {
+                log.error { "Failed to retrieve business document for message: $messageId: ${response.value.error} Stack trace: ${response.value.stackTrace}" }
+                null
+            }
+        }
+    }
+
+    private suspend fun publishMessageToKafka(messageId: Uuid, businessDocument: String): Boolean {
+        val key = messageId.toString()
+        val payload = Base64.getDecoder().decode(businessDocument)
+
+        return messagePublisher.publish(key, payload)
+            .map {
+                log.info { "Successfully published message $key to Kafka." }
+                true
+            }
+            .getOrElse { t ->
+                log.error { "Failed to publish message $key: ${t.stackTraceToString()}" }
+                false
+            }
     }
 
     private fun List<Message>.withLogging(): List<Message> = also {

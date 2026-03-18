@@ -1,24 +1,36 @@
 package no.nav.helsemelding.inbound.service
 
-import arrow.core.Either
+import arrow.core.Either.Left
 import arrow.core.Either.Right
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.data.forAll
-import io.kotest.data.row
 import io.kotest.matchers.shouldBe
 import no.nav.helsemelding.ediadapter.model.ErrorMessage
+import no.nav.helsemelding.ediadapter.model.GetBusinessDocumentResponse
 import no.nav.helsemelding.ediadapter.model.Message
-import no.nav.helsemelding.inbound.util.FAGSYSTEM_HER_ID
-import no.nav.helsemelding.inbound.util.FakeEdiAdapterClient
+import no.nav.helsemelding.inbound.FakeMessagePublisher
+import org.apache.kafka.clients.producer.RecordMetadata
+import org.apache.kafka.common.TopicPartition
+import java.util.Base64
 import kotlin.uuid.Uuid
+
+const val FAGSYSTEM_HER_ID = 8142519
 
 class PollerServiceSpec : StringSpec(
     {
-        "message should be processed if it is an apprec" {
+        lateinit var ediAdapterClient: FakeEdiAdapterClient
+        lateinit var publisher: FakeMessagePublisher
+        lateinit var pollerService: PollerService
+
+        beforeEach {
+            ediAdapterClient = FakeEdiAdapterClient()
+            publisher = FakeMessagePublisher()
+            pollerService = PollerService(ediAdapterClient, publisher)
+        }
+
+        "Apprec should be processed" {
             val uuid = Uuid.random()
-            val ediAdapterClient = FakeEdiAdapterClient()
-            ediAdapterClient.givenMarkAsRead(uuid, Right(true))
-            val pollerService = PollerService(ediAdapterClient)
+
+            ediAdapterClient.givenMarkAsRead(Right(true))
 
             val message = Message(
                 id = uuid,
@@ -29,37 +41,15 @@ class PollerServiceSpec : StringSpec(
             pollerService.processMessage(message) shouldBe true
         }
 
-        "message should not be processed if it's not an apprec" {
-            forAll(
-                row(null),
-                row(false)
-            ) { isApprec ->
-                val uuid = Uuid.random()
-                val ediAdapterClient = FakeEdiAdapterClient()
-                ediAdapterClient.givenMarkAsRead(uuid, Right(true))
-                val pollerService = PollerService(ediAdapterClient)
-
-                val message = Message(
-                    id = uuid,
-                    isAppRec = isApprec,
-                    receiverHerId = FAGSYSTEM_HER_ID
-                )
-
-                pollerService.processMessage(message) shouldBe false
-            }
-        }
-
-        "message should not be processed if ediAdapterClient returns error" {
+        "Apprec should not be processed if EDI Adapter returns error" {
             val uuid = Uuid.random()
-            val ediAdapterClient = FakeEdiAdapterClient()
 
             val errorMessage500 = ErrorMessage(
                 error = "Internal Server Error",
-                errorCode = 1000,
+                errorCode = 500,
                 requestId = Uuid.random().toString()
             )
-            ediAdapterClient.givenMarkAsRead(uuid, Either.Left(errorMessage500))
-            val pollerService = PollerService(ediAdapterClient)
+            ediAdapterClient.givenMarkAsRead(Left(errorMessage500))
 
             val message = Message(
                 id = uuid,
@@ -69,5 +59,141 @@ class PollerServiceSpec : StringSpec(
 
             pollerService.processMessage(message) shouldBe false
         }
+
+        "Incoming message should be processed" {
+            val uuid = Uuid.random()
+
+            val xml = readFileToString("message/incomingDialogMessage.xml")
+            val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
+
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                Right(
+                    GetBusinessDocumentResponse(
+                        businessDocument = encoded,
+                        contentType = "application/xml",
+                        contentTransferEncoding = "base64"
+
+                    )
+                )
+            )
+            ediAdapterClient.givenMarkAsRead(Right(true))
+
+            publisher.givenPublishingResult(buildSuccessfulPublishingResult())
+
+            val message = Message(
+                id = uuid,
+                isAppRec = false,
+                receiverHerId = FAGSYSTEM_HER_ID
+            )
+
+            val result = pollerService.processMessage(message)
+
+            result shouldBe true
+
+            publisher.publishedKey shouldBe uuid.toString()
+            String(publisher.publishedPayload!!) shouldBe xml
+        }
+
+        "Incoming message should not be processed if retrieving business document fails" {
+            val uuid = Uuid.random()
+
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                Left(
+                    ErrorMessage(
+                        error = "Failed retrieving document",
+                        errorCode = 404,
+                        requestId = Uuid.random().toString()
+                    )
+                )
+            )
+
+            publisher.givenPublishingResult(buildSuccessfulPublishingResult())
+
+            val message = Message(
+                id = uuid,
+                isAppRec = false,
+                receiverHerId = FAGSYSTEM_HER_ID
+            )
+
+            pollerService.processMessage(message) shouldBe false
+        }
+
+        "Incoming message should not be processed if publishing to Kafka fails" {
+            val uuid = Uuid.random()
+
+            val xml = readFileToString("message/incomingDialogMessage.xml")
+            val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
+
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                Right(
+                    GetBusinessDocumentResponse(
+                        businessDocument = encoded,
+                        contentType = "application/xml",
+                        contentTransferEncoding = "base64"
+                    )
+                )
+            )
+
+            publisher.givenPublishingResult(Result.failure(RuntimeException("Kafka unavailable")))
+
+            val message = Message(
+                id = uuid,
+                isAppRec = false,
+                receiverHerId = FAGSYSTEM_HER_ID
+            )
+
+            pollerService.processMessage(message) shouldBe false
+        }
+
+        "Incoming message should not be processed if marking as read fails" {
+            val uuid = Uuid.random()
+
+            val xml = readFileToString("message/incomingDialogMessage.xml")
+            val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
+
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                Right(
+                    GetBusinessDocumentResponse(
+                        businessDocument = encoded,
+                        contentType = "application/xml",
+                        contentTransferEncoding = "base64"
+                    )
+                )
+            )
+
+            val errorMessage500 = ErrorMessage(
+                error = "Internal Server Error",
+                errorCode = 500,
+                requestId = Uuid.random().toString()
+            )
+            ediAdapterClient.givenMarkAsRead(Left(errorMessage500))
+
+            publisher.givenPublishingResult(buildSuccessfulPublishingResult())
+
+            val message = Message(
+                id = uuid,
+                isAppRec = false,
+                receiverHerId = FAGSYSTEM_HER_ID
+            )
+
+            pollerService.processMessage(message) shouldBe false
+        }
     }
+
 )
+
+fun buildSuccessfulPublishingResult(): Result<RecordMetadata> {
+    val record = RecordMetadata(
+        TopicPartition("test", 0),
+        0L,
+        0,
+        System.currentTimeMillis(),
+        0,
+        0
+    )
+    return Result.success(record)
+}
+
+fun readFileToString(path: String): String {
+    return PollerServiceSpec::class.java.classLoader.getResource(path)!!.readText()
+}

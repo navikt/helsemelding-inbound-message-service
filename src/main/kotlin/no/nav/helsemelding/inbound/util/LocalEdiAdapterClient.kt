@@ -1,4 +1,4 @@
-package no.nav.helsemelding.inbound.util
+package no.nav.helsemelding.inbound.service
 
 import arrow.core.Either
 import arrow.core.Either.Left
@@ -13,65 +13,55 @@ import no.nav.helsemelding.ediadapter.model.Metadata
 import no.nav.helsemelding.ediadapter.model.PostAppRecRequest
 import no.nav.helsemelding.ediadapter.model.PostMessageRequest
 import no.nav.helsemelding.ediadapter.model.StatusInfo
+import java.util.Base64
+import kotlin.random.Random
 import kotlin.uuid.Uuid
 
 const val FAGSYSTEM_HER_ID = 8142519
 
-class FakeEdiAdapterClient : EdiAdapterClient {
-    private val messageById = mutableMapOf<Uuid, Either<ErrorMessage, Message>>()
-    private val postApprecById = mutableMapOf<Uuid, Either<ErrorMessage, Metadata>>()
-    private val markAsReadById = mutableMapOf<Uuid, Either<ErrorMessage, Boolean>>()
-
+class LocalEdiAdapterClient : EdiAdapterClient {
     val errorMessage404 = ErrorMessage(
         error = "Not Found",
-        errorCode = 1000,
+        errorCode = 404,
         requestId = Uuid.random().toString()
     )
 
-    fun givenMarkAsRead(id: Uuid, isMarked: Either<ErrorMessage, Boolean>) {
-        markAsReadById[id] = isMarked
-    }
-
-    fun givenPostApprec(
-        id: Uuid,
-        apprecResponse: Either<ErrorMessage, Metadata>
-    ) {
-        postApprecById[id] = apprecResponse
-    }
-
-    override suspend fun getMessageStatus(id: Uuid): Either<ErrorMessage, List<StatusInfo>> = Right(emptyList())
+    override suspend fun getMessageStatus(id: Uuid): Either<ErrorMessage, List<StatusInfo>> = Left(errorMessage404)
 
     override suspend fun getMessage(id: Uuid): Either<ErrorMessage, Message> = Left(errorMessage404)
 
-    override suspend fun getBusinessDocument(id: Uuid): Either<ErrorMessage, GetBusinessDocumentResponse> =
-        Left(errorMessage404)
+    override suspend fun getBusinessDocument(id: Uuid): Either<ErrorMessage, GetBusinessDocumentResponse> {
+        val xml = this::class.java.classLoader.getResource("message/incomingDialogMessage.xml")!!.readText()
+        val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
+        return Right(
+            GetBusinessDocumentResponse(
+                businessDocument = encoded,
+                contentType = "application/xml",
+                contentTransferEncoding = "base64"
+
+            )
+        )
+    }
 
     override suspend fun postApprec(
         id: Uuid,
         apprecSenderHerId: Int,
         postAppRecRequest: PostAppRecRequest
-    ): Either<ErrorMessage, Metadata> {
-        return postApprecById[id] ?: when (messageById[id]) {
-            is Right -> Right(Metadata(Uuid.random(), ""))
-            else -> Left(errorMessage404)
-        }
-    }
+    ): Either<ErrorMessage, Metadata> = Left(errorMessage404)
 
-    override suspend fun markMessageAsRead(id: Uuid, herId: Int): Either<ErrorMessage, Boolean> =
-        markAsReadById[id] ?: Right(true)
+    override suspend fun markMessageAsRead(id: Uuid, herId: Int): Either<ErrorMessage, Boolean> = Right(true)
 
-    override suspend fun getApprecInfo(id: Uuid): Either<ErrorMessage, List<ApprecInfo>> =
-        Right(emptyList())
+    override suspend fun getApprecInfo(id: Uuid): Either<ErrorMessage, List<ApprecInfo>> = Left(errorMessage404)
 
     override suspend fun getMessages(getMessagesRequest: GetMessagesRequest): Either<ErrorMessage, List<Message>> {
         val messages = List(getMessagesRequest.messagesToFetch) {
             Message(
                 id = Uuid.random(),
                 receiverHerId = FAGSYSTEM_HER_ID,
-                isAppRec = false
+                isAppRec = Random.nextBoolean()
             )
         }
-        messages.forEach { messageById[it.id!!] = Right(it) }
+
         return Right(messages)
     }
 
