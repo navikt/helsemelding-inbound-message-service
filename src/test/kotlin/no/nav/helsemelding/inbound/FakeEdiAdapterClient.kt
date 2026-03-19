@@ -17,6 +17,7 @@ import kotlin.uuid.Uuid
 class FakeEdiAdapterClient : EdiAdapterClient {
     private var getBusinessDocumentResponse: Either<ErrorMessage, GetBusinessDocumentResponse>? = null
     private var markMessageAsReadResponse: Either<ErrorMessage, Boolean>? = null
+    private var postApprecResponse: Either<ErrorMessage, Metadata>? = null
 
     val errorMessage404 = ErrorMessage(
         error = "Not Found",
@@ -32,6 +33,10 @@ class FakeEdiAdapterClient : EdiAdapterClient {
         getBusinessDocumentResponse = response
     }
 
+    fun givenPostApprecResponse(response: Either<ErrorMessage, Metadata>) {
+        postApprecResponse = response
+    }
+
     override suspend fun getMessageStatus(id: Uuid): Either<ErrorMessage, List<StatusInfo>> = Left(errorMessage404)
 
     override suspend fun getMessage(id: Uuid): Either<ErrorMessage, Message> = Left(errorMessage404)
@@ -42,7 +47,7 @@ class FakeEdiAdapterClient : EdiAdapterClient {
         id: Uuid,
         apprecSenderHerId: Int,
         postAppRecRequest: PostAppRecRequest
-    ): Either<ErrorMessage, Metadata> = Left(errorMessage404)
+    ): Either<ErrorMessage, Metadata> = postApprecResponse!!
 
     override suspend fun markMessageAsRead(id: Uuid, herId: Int): Either<ErrorMessage, Boolean> = markMessageAsReadResponse!!
 

@@ -7,6 +7,7 @@ import io.kotest.matchers.shouldBe
 import no.nav.helsemelding.ediadapter.model.ErrorMessage
 import no.nav.helsemelding.ediadapter.model.GetBusinessDocumentResponse
 import no.nav.helsemelding.ediadapter.model.Message
+import no.nav.helsemelding.ediadapter.model.Metadata
 import no.nav.helsemelding.inbound.FakeMessagePublisher
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
@@ -77,6 +78,14 @@ class PollerServiceSpec : StringSpec(
                 )
             )
             ediAdapterClient.givenMarkAsRead(Right(true))
+            ediAdapterClient.givenPostApprecResponse(
+                Right(
+                    Metadata(
+                        id = Uuid.random(),
+                        location = "http://example.com/apprec/${Uuid.random()}"
+                    )
+                )
+            )
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
@@ -177,6 +186,46 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
+        }
+
+        "Incoming message should not be processed if sending apprec fails" {
+            val uuid = Uuid.random()
+
+            val xml = readFileToString("message/incomingDialogMessage.xml")
+            val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
+
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                Right(
+                    GetBusinessDocumentResponse(
+                        businessDocument = encoded,
+                        contentType = "application/xml",
+                        contentTransferEncoding = "base64"
+
+                    )
+                )
+            )
+            ediAdapterClient.givenMarkAsRead(Right(true))
+            ediAdapterClient.givenPostApprecResponse(
+                Left(
+                    ErrorMessage(
+                        error = "Sending apprec failed",
+                        errorCode = 500,
+                        requestId = Uuid.random().toString()
+                    )
+                )
+            )
+
+            publisher.givenPublishingResult(buildSuccessfulPublishingResult())
+
+            val message = Message(
+                id = uuid,
+                isAppRec = false,
+                receiverHerId = FAGSYSTEM_HER_ID
+            )
+
+            val result = pollerService.processMessage(message)
+
+            result shouldBe false
         }
     }
 

@@ -12,6 +12,7 @@ import no.nav.helsemelding.ediadapter.model.ErrorMessage
 import no.nav.helsemelding.ediadapter.model.GetBusinessDocumentResponse
 import no.nav.helsemelding.ediadapter.model.GetMessagesRequest
 import no.nav.helsemelding.ediadapter.model.Message
+import no.nav.helsemelding.ediadapter.model.Metadata
 import no.nav.helsemelding.ediadapter.model.PostAppRecRequest
 import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
@@ -102,6 +103,7 @@ class PollerService(
         val isMarkedAsRead = markMessageAsRead(messageId, receiverHerId)
         if (!isMarkedAsRead) return false
 
+        // TODO: Temporary solution. Application rece should be sent as a result of receiving feedback from fagsystem.
         return sendAppRec(messageId, receiverHerId)
     }
 
@@ -109,7 +111,18 @@ class PollerService(
         val appRecRequest = PostAppRecRequest(
             appRecStatus = AppRecStatus.OK
         )
-        return true
+
+        val response = ediAdapterClient.postApprec(messageId, receiverHerId, appRecRequest)
+        return when (response) {
+            is Right<Metadata> -> {
+                log.info { "Apprec sent successfully for message: $messageId" }
+                true
+            }
+            is Left<ErrorMessage> -> {
+                log.error { "Failed to send apprec for message: $messageId. Error: ${response.value}" }
+                false
+            }
+        }
     }
 
     private suspend fun markMessageAsRead(messageId: Uuid, herId: Int): Boolean {
