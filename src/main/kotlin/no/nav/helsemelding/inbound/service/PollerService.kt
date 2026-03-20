@@ -158,7 +158,7 @@ class PollerService(
                 true
             }
             .getOrElse { t ->
-                log.error { "Failed to publish message $key to Kafka: ${t.stackTraceToString()}" }
+                log.error(t) { "Failed to publish message to Kafka: $key" }
                 false
             }
     }

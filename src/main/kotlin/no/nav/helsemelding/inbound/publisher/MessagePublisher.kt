@@ -33,7 +33,7 @@ class DialogMessagePublisher(
             }
             .onFailure {
                     t ->
-                log.error { "Failed publishing incoming message $key: ${t.stackTraceToString()}" }
+                log.error(t) { "Failed publishing incoming message: $key" }
             }
     }
 }
