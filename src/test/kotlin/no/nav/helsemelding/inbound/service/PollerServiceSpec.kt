@@ -73,7 +73,6 @@ class PollerServiceSpec : StringSpec(
                         businessDocument = encoded,
                         contentType = "application/xml",
                         contentTransferEncoding = "base64"
-
                     )
                 )
             )
@@ -200,7 +199,6 @@ class PollerServiceSpec : StringSpec(
                         businessDocument = encoded,
                         contentType = "application/xml",
                         contentTransferEncoding = "base64"
-
                     )
                 )
             )

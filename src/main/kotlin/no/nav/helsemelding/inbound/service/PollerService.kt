@@ -77,24 +77,20 @@ class PollerService(
 
             log.info { "Processing message: $messageId" }
             when (message.isAppRec) {
-                true -> {
-                    log.info { "Processing apprec: $messageId" }
-                    processAppRec(messageId, receiverHerId)
-                }
-                else -> {
-                    log.info { "Processing incoming message: $messageId" }
-                    processIncomingMessage(messageId, receiverHerId)
-                }
+                true -> processAppRec(messageId, receiverHerId)
+                else -> processIncomingMessage(messageId, receiverHerId)
             }
         }
     }
 
     private suspend fun processAppRec(messageId: Uuid, receiverHerId: Int): Boolean {
         // TODO: Can be removed when outbound-message-service handles apprec
+        log.info { "Processing apprec: $messageId" }
         return markMessageAsRead(messageId, receiverHerId)
     }
 
     private suspend fun processIncomingMessage(messageId: Uuid, receiverHerId: Int): Boolean {
+        log.info { "Processing incoming message: $messageId" }
         val businessDocument = getBusinessDocument(messageId) ?: return false
 
         val isPublishingSuccessful = publishMessageToKafka(messageId, businessDocument)
@@ -103,7 +99,7 @@ class PollerService(
         val isMarkedAsRead = markMessageAsRead(messageId, receiverHerId)
         if (!isMarkedAsRead) return false
 
-        // TODO: Temporary solution. Application rece should be sent as a result of receiving feedback from fagsystem.
+        // TODO: Temporary solution. Application receipt should be sent as a result of receiving feedback from fagsystem.
         return sendAppRec(messageId, receiverHerId)
     }
 
