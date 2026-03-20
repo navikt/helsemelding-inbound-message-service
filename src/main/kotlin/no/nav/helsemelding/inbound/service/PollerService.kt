@@ -7,10 +7,13 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.opentelemetry.api.GlobalOpenTelemetry
 import kotlinx.coroutines.Dispatchers
 import no.nav.helsemelding.ediadapter.client.EdiAdapterClient
+import no.nav.helsemelding.ediadapter.model.AppRecStatus
 import no.nav.helsemelding.ediadapter.model.ErrorMessage
 import no.nav.helsemelding.ediadapter.model.GetBusinessDocumentResponse
 import no.nav.helsemelding.ediadapter.model.GetMessagesRequest
 import no.nav.helsemelding.ediadapter.model.Message
+import no.nav.helsemelding.ediadapter.model.Metadata
+import no.nav.helsemelding.ediadapter.model.PostAppRecRequest
 import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.withSpan
@@ -74,30 +77,46 @@ class PollerService(
 
             log.info { "Processing message: $messageId" }
             when (message.isAppRec) {
-                true -> {
-                    log.info { "Processing apprec: $messageId" }
+                true -> processAppRec(messageId, receiverHerId)
+                else -> processIncomingMessage(messageId, receiverHerId)
+            }
+        }
+    }
 
-                    // TODO: Can be removed when outbound-message-service handles apprec
-                    markMessageAsRead(messageId, receiverHerId)
-                }
-                else -> {
-                    log.info { "Processing incoming message: $messageId" }
+    private suspend fun processAppRec(messageId: Uuid, receiverHerId: Int): Boolean {
+        // TODO: Can be removed when outbound-message-service handles apprec
+        log.info { "Processing apprec: $messageId" }
+        return markMessageAsRead(messageId, receiverHerId)
+    }
 
-                    val businessDocument = getBusinessDocument(messageId)
-                    if (businessDocument != null) {
-                        val isPublishingSuccessful = publishMessageToKafka(messageId, businessDocument)
-                        if (isPublishingSuccessful) {
-                            log.info { "Mark message as read: $messageId" }
-                            markMessageAsRead(messageId, receiverHerId)
-                        } else {
-                            log.error { "Failed to publish message to Kafka: $messageId. Skipping the message!" }
-                            false
-                        }
-                    } else {
-                        log.error { "Failed to get business document for message: $messageId. Skipping the message!" }
-                        false
-                    }
-                }
+    private suspend fun processIncomingMessage(messageId: Uuid, receiverHerId: Int): Boolean {
+        log.info { "Processing incoming message: $messageId" }
+        val businessDocument = getBusinessDocument(messageId) ?: return false
+
+        val isPublishingSuccessful = publishMessageToKafka(messageId, businessDocument)
+        if (!isPublishingSuccessful) return false
+
+        val isMarkedAsRead = markMessageAsRead(messageId, receiverHerId)
+        if (!isMarkedAsRead) return false
+
+        // TODO: Temporary solution. Application receipt should be sent as a result of receiving feedback from fagsystem.
+        return sendAppRec(messageId, receiverHerId)
+    }
+
+    private suspend fun sendAppRec(messageId: Uuid, receiverHerId: Int): Boolean {
+        val appRecRequest = PostAppRecRequest(
+            appRecStatus = AppRecStatus.OK
+        )
+
+        val response = ediAdapterClient.postApprec(messageId, receiverHerId, appRecRequest)
+        return when (response) {
+            is Right<Metadata> -> {
+                log.info { "Apprec sent successfully for message: $messageId" }
+                true
+            }
+            is Left<ErrorMessage> -> {
+                log.error { "Failed to send apprec for message: $messageId. Error: ${response.value}" }
+                false
             }
         }
     }
@@ -139,7 +158,7 @@ class PollerService(
                 true
             }
             .getOrElse { t ->
-                log.error { "Failed to publish message $key: ${t.stackTraceToString()}" }
+                log.error(t) { "Failed to publish message to Kafka: $key" }
                 false
             }
     }
