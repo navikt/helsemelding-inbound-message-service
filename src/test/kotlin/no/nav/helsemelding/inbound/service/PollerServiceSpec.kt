@@ -9,6 +9,7 @@ import no.nav.helsemelding.ediadapter.model.GetBusinessDocumentResponse
 import no.nav.helsemelding.ediadapter.model.Message
 import no.nav.helsemelding.ediadapter.model.Metadata
 import no.nav.helsemelding.inbound.FakeMessagePublisher
+import no.nav.helsemelding.inbound.metrics.FakeMetrics
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
 import java.util.Base64
@@ -25,7 +26,11 @@ class PollerServiceSpec : StringSpec(
         beforeEach {
             ediAdapterClient = FakeEdiAdapterClient()
             publisher = FakeMessagePublisher()
-            pollerService = PollerService(ediAdapterClient, publisher)
+            pollerService = PollerService(
+                ediAdapterClient,
+                publisher,
+                FakeMetrics()
+            )
         }
 
         "Apprec should be processed" {

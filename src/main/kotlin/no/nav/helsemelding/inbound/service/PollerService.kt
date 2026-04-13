@@ -15,6 +15,7 @@ import no.nav.helsemelding.ediadapter.model.Message
 import no.nav.helsemelding.ediadapter.model.Metadata
 import no.nav.helsemelding.ediadapter.model.PostAppRecRequest
 import no.nav.helsemelding.inbound.config
+import no.nav.helsemelding.inbound.metrics.Metrics
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.withSpan
 import java.util.Base64
@@ -25,7 +26,8 @@ private val tracer = GlobalOpenTelemetry.getTracer("PollerService")
 
 class PollerService(
     private val ediAdapterClient: EdiAdapterClient,
-    private val messagePublisher: MessagePublisher
+    private val messagePublisher: MessagePublisher,
+    private val metrics: Metrics
 ) {
     private val pollerConfig = config().poller
 
@@ -66,7 +68,11 @@ class PollerService(
         log.info { "Processing ($summary)" }
 
         logBatchDuration(summary) {
-            batch.parMap(Dispatchers.IO) { processMessage(it) }
+            batch
+                .parMap(Dispatchers.IO) {
+                    metrics.registerIncomingMessageReceived()
+                    processMessage(it)
+                }
         }
     }
 

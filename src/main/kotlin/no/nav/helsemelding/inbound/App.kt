@@ -11,6 +11,7 @@ import io.ktor.server.netty.Netty
 import io.ktor.utils.io.CancellationException
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import kotlinx.coroutines.awaitCancellation
+import no.nav.helsemelding.inbound.metrics.CustomMetrics
 import no.nav.helsemelding.inbound.plugin.configureMetrics
 import no.nav.helsemelding.inbound.plugin.configureRoutes
 import no.nav.helsemelding.inbound.publisher.DialogMessagePublisher
@@ -22,6 +23,7 @@ fun main() = SuspendApp {
     result {
         resourceScope {
             val deps = dependencies()
+            val metrics = CustomMetrics(deps.meterRegistry)
 
             server(
                 Netty,
@@ -31,7 +33,11 @@ fun main() = SuspendApp {
             )
 
             val dialogMessagePublisher = DialogMessagePublisher(deps.kafkaPublisher)
-            val poller = PollerService(deps.ediAdapterClient, dialogMessagePublisher)
+            val poller = PollerService(
+                deps.ediAdapterClient,
+                dialogMessagePublisher,
+                metrics
+            )
 
             scheduleProcessMessages(poller)
 
