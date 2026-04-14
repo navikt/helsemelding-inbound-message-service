@@ -8,6 +8,7 @@ private val log = KotlinLogging.logger {}
 
 interface Metrics {
     fun registerIncomingMessageReceived(isApprec: Boolean = false)
+    fun registerIncomingMessageFailed(errorType: ErrorTypeTag)
 }
 
 class CustomMetrics(val registry: MeterRegistry) : Metrics {
@@ -15,7 +16,15 @@ class CustomMetrics(val registry: MeterRegistry) : Metrics {
     override fun registerIncomingMessageReceived(isApprec: Boolean) {
         Counter.builder("helsemelding_incoming_messages_received")
             .description("Number of incoming messages received from NHN")
-            .tag("isApprec", isApprec.toString())
+            .tag("is_apprec", isApprec.toString())
+            .register(registry)
+            .increment()
+    }
+
+    override fun registerIncomingMessageFailed(errorType: ErrorTypeTag) {
+        Counter.builder("helsemelding_incoming_messages_failed")
+            .description("Number of incoming messages that failed to be processed")
+            .tag("error_type", errorType.value)
             .register(registry)
             .increment()
     }
@@ -23,6 +32,10 @@ class CustomMetrics(val registry: MeterRegistry) : Metrics {
 
 class FakeMetrics() : Metrics {
     override fun registerIncomingMessageReceived(isApprec: Boolean) {
-        log.info { "helsemelding_incoming_messages_received metric is registered" }
+        log.info { "helsemelding_incoming_messages_received metric is registered with is_apprec: $isApprec" }
+    }
+
+    override fun registerIncomingMessageFailed(errorType: ErrorTypeTag) {
+        log.info { "helsemelding_incoming_messages_failed metric is registered with error_type: ${errorType.value}" }
     }
 }

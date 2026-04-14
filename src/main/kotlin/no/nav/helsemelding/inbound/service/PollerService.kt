@@ -15,6 +15,7 @@ import no.nav.helsemelding.ediadapter.model.Message
 import no.nav.helsemelding.ediadapter.model.Metadata
 import no.nav.helsemelding.ediadapter.model.PostAppRecRequest
 import no.nav.helsemelding.inbound.config
+import no.nav.helsemelding.inbound.metrics.ErrorTypeTag
 import no.nav.helsemelding.inbound.metrics.Metrics
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.withSpan
@@ -122,6 +123,7 @@ class PollerService(
             }
             is Left<ErrorMessage> -> {
                 log.error { "Failed to send apprec for message: $messageId. Error: ${response.value}" }
+                metrics.registerIncomingMessageFailed(ErrorTypeTag.SENDING_APPREC_FAILED)
                 false
             }
         }
@@ -136,6 +138,7 @@ class PollerService(
 
             is Left<ErrorMessage> -> {
                 log.error { "Failed to mark message: $messageId as read. Error: ${either.value}" }
+                metrics.registerIncomingMessageFailed(ErrorTypeTag.MARKING_MESSAGE_AS_READ_FAILED)
                 false
             }
         }
@@ -149,6 +152,7 @@ class PollerService(
             }
             is Left<ErrorMessage> -> {
                 log.error { "Failed to retrieve business document for message: $messageId: ${response.value.error} Stack trace: ${response.value.stackTrace}" }
+                metrics.registerIncomingMessageFailed(ErrorTypeTag.RETRIEVING_BUSINESS_DOCUMENT_FAILED)
                 null
             }
         }
@@ -165,6 +169,7 @@ class PollerService(
             }
             .getOrElse { t ->
                 log.error(t) { "Failed to publish message to Kafka: $key" }
+                metrics.registerIncomingMessageFailed(ErrorTypeTag.PUBLISHING_TO_KAFKA_FAILED)
                 false
             }
     }
