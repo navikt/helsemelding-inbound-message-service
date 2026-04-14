@@ -68,11 +68,7 @@ class PollerService(
         log.info { "Processing ($summary)" }
 
         logBatchDuration(summary) {
-            batch
-                .parMap(Dispatchers.IO) {
-                    metrics.registerIncomingMessageReceived()
-                    processMessage(it)
-                }
+            batch.parMap(Dispatchers.IO) { processMessage(it) }
         }
     }
 
@@ -92,11 +88,15 @@ class PollerService(
     private suspend fun processAppRec(messageId: Uuid, receiverHerId: Int): Boolean {
         // TODO: Can be removed when outbound-message-service handles apprec
         log.info { "Processing apprec: $messageId" }
+        metrics.registerIncomingMessageReceived(true)
+
         return markMessageAsRead(messageId, receiverHerId)
     }
 
     private suspend fun processIncomingMessage(messageId: Uuid, receiverHerId: Int): Boolean {
         log.info { "Processing incoming message: $messageId" }
+        metrics.registerIncomingMessageReceived()
+
         val businessDocument = getBusinessDocument(messageId) ?: return false
 
         val isPublishingSuccessful = publishMessageToKafka(messageId, businessDocument)
