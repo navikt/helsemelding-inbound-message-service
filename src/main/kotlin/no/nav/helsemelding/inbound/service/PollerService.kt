@@ -130,7 +130,22 @@ class PollerService(
     }
 
     private suspend fun markMessageAsRead(messageId: Uuid, herId: Int): Boolean {
-        return when (val either = ediAdapterClient.markMessageAsRead(messageId, herId)) {
+        var either = ediAdapterClient.markMessageAsRead(messageId, herId)
+
+        // TODO: FOR TESTING PURPOSE ONLY. REMOVE BEFORE MERGE
+        if (System.getenv("NAIS_CLUSTER_NAME") == "dev-gcp") {
+            if ((0..9).random() == 0) {
+                either = Left(
+                    ErrorMessage(
+                        error = "Simulated random failure",
+                        errorCode = 500,
+                        requestId = Uuid.random().toString()
+                    )
+                )
+            }
+        }
+
+        return when (either) {
             is Right<Boolean> -> {
                 log.info { "Successfully marked message: $messageId as read." }
                 either.value
@@ -145,7 +160,22 @@ class PollerService(
     }
 
     private suspend fun getBusinessDocument(messageId: Uuid): String? {
-        return when (val response = ediAdapterClient.getBusinessDocument(messageId)) {
+        var response = ediAdapterClient.getBusinessDocument(messageId)
+
+        // TODO: FOR TESTING PURPOSE ONLY. REMOVE BEFORE MERGE
+        if (System.getenv("NAIS_CLUSTER_NAME") == "dev-gcp") {
+            if ((0..9).random() == 0) {
+                response = Left(
+                    ErrorMessage(
+                        error = "Simulated random failure",
+                        errorCode = 500,
+                        requestId = Uuid.random().toString()
+                    )
+                )
+            }
+        }
+
+        return when (response) {
             is Right<GetBusinessDocumentResponse> -> {
                 log.info { "Retrieved business document for message: $messageId" }
                 response.value.businessDocument
