@@ -18,6 +18,7 @@ import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.metrics.ErrorTypeTag
 import no.nav.helsemelding.inbound.metrics.Metrics
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
+import no.nav.helsemelding.inbound.util.registerDuration
 import no.nav.helsemelding.inbound.util.withSpan
 import java.util.Base64
 import kotlin.uuid.Uuid
@@ -81,7 +82,9 @@ class PollerService(
             log.info { "Processing message: $messageId" }
             when (message.isAppRec) {
                 true -> processAppRec(messageId, receiverHerId)
-                else -> processIncomingMessage(messageId, receiverHerId)
+                else -> registerDuration(metrics::registerIncomingMessageProcessingDuration) {
+                    processIncomingMessage(messageId, receiverHerId)
+                }
             }
         }
     }
