@@ -15,7 +15,10 @@ import no.nav.helsemelding.ediadapter.model.Message
 import no.nav.helsemelding.ediadapter.model.Metadata
 import no.nav.helsemelding.ediadapter.model.PostAppRecRequest
 import no.nav.helsemelding.inbound.config
+import no.nav.helsemelding.inbound.metrics.ErrorTypeTag
+import no.nav.helsemelding.inbound.metrics.Metrics
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
+import no.nav.helsemelding.inbound.util.registerDuration
 import no.nav.helsemelding.inbound.util.withSpan
 import java.util.Base64
 import kotlin.uuid.Uuid
@@ -25,7 +28,8 @@ private val tracer = GlobalOpenTelemetry.getTracer("PollerService")
 
 class PollerService(
     private val ediAdapterClient: EdiAdapterClient,
-    private val messagePublisher: MessagePublisher
+    private val messagePublisher: MessagePublisher,
+    private val metrics: Metrics
 ) {
     private val pollerConfig = config().poller
 
@@ -78,7 +82,9 @@ class PollerService(
             log.info { "Processing message: $messageId" }
             when (message.isAppRec) {
                 true -> processAppRec(messageId, receiverHerId)
-                else -> processIncomingMessage(messageId, receiverHerId)
+                else -> registerDuration(metrics::registerIncomingMessageProcessingDuration) {
+                    processIncomingMessage(messageId, receiverHerId)
+                }
             }
         }
     }
@@ -86,11 +92,15 @@ class PollerService(
     private suspend fun processAppRec(messageId: Uuid, receiverHerId: Int): Boolean {
         // TODO: Can be removed when outbound-message-service handles apprec
         log.info { "Processing apprec: $messageId" }
+        metrics.registerIncomingMessageReceived(true)
+
         return markMessageAsRead(messageId, receiverHerId)
     }
 
     private suspend fun processIncomingMessage(messageId: Uuid, receiverHerId: Int): Boolean {
         log.info { "Processing incoming message: $messageId" }
+        metrics.registerIncomingMessageReceived()
+
         val businessDocument = getBusinessDocument(messageId) ?: return false
 
         val isPublishingSuccessful = publishMessageToKafka(messageId, businessDocument)
@@ -116,6 +126,7 @@ class PollerService(
             }
             is Left<ErrorMessage> -> {
                 log.error { "Failed to send apprec for message: $messageId. Error: ${response.value}" }
+                metrics.registerIncomingMessageFailed(ErrorTypeTag.SENDING_APPREC_FAILED)
                 false
             }
         }
@@ -130,6 +141,7 @@ class PollerService(
 
             is Left<ErrorMessage> -> {
                 log.error { "Failed to mark message: $messageId as read. Error: ${either.value}" }
+                metrics.registerIncomingMessageFailed(ErrorTypeTag.MARKING_MESSAGE_AS_READ_FAILED)
                 false
             }
         }
@@ -143,6 +155,7 @@ class PollerService(
             }
             is Left<ErrorMessage> -> {
                 log.error { "Failed to retrieve business document for message: $messageId: ${response.value.error} Stack trace: ${response.value.stackTrace}" }
+                metrics.registerIncomingMessageFailed(ErrorTypeTag.RETRIEVING_BUSINESS_DOCUMENT_FAILED)
                 null
             }
         }
@@ -159,6 +172,7 @@ class PollerService(
             }
             .getOrElse { t ->
                 log.error(t) { "Failed to publish message to Kafka: $key" }
+                metrics.registerIncomingMessageFailed(ErrorTypeTag.PUBLISHING_TO_KAFKA_FAILED)
                 false
             }
     }
