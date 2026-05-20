@@ -61,7 +61,7 @@ fun Route.internalRoutes(registry: PrometheusMeterRegistry) {
 
             val readResult = attachmentClient.getAttachments(messageId)
 
-            call.respond(readResult)
+            call.respond(readResult.getOrNull().orEmpty())
         } catch (e: Exception) {
             call.respond(HttpStatusCode.InternalServerError, "Error testing attachments: ${e.message}")
         }
