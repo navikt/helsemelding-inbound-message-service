@@ -1,5 +1,6 @@
 package no.nav.helsemelding.inbound.plugin
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.response.respond
@@ -13,6 +14,8 @@ import no.nav.helsemelding.attachmentclient.HttpAttachmentClient
 import no.nav.helsemelding.attachmentmodel.model.Attachment
 import java.lang.Thread.sleep
 import kotlin.uuid.Uuid
+
+private val log = KotlinLogging.logger {}
 
 fun Application.configureRoutes(
     registry: PrometheusMeterRegistry
@@ -61,7 +64,9 @@ fun Route.internalRoutes(registry: PrometheusMeterRegistry) {
 
             val readResult = attachmentClient.getAttachments(messageId)
 
-            call.respond(HttpStatusCode.OK, readResult.getOrNull().orEmpty().size)
+            log.debug { "Attachment test: ${readResult.getOrNull()}" }
+
+            call.respond(HttpStatusCode.OK, readResult.getOrNull().toString())
         } catch (e: Exception) {
             call.respond(HttpStatusCode.InternalServerError, "Error testing attachments: ${e.message}")
         }
