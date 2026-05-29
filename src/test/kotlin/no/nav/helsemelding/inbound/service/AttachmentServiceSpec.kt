@@ -3,6 +3,8 @@ package no.nav.helsemelding.inbound.service
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import java.nio.file.Files
 import java.nio.file.Paths
 
@@ -11,25 +13,26 @@ private val MESSAGE_WITHOUT_ATTACHMENTS_PATH = "src/test/resources/message_witho
 
 class AttachmentServiceSpec : StringSpec({
 
-    "should split fellesformat message and attachments" {
-        val attachmentService = AttachmentService()
+    val attachmentService = AttachmentService()
 
+    "should split XML message and attachments" {
         val messageWithAttachments = String(Files.readAllBytes(Paths.get(MESSAGE_WITH_ATTACHMENTS_PATH)))
 
-        val splitResult = attachmentService.splitMsgHeadAndVedlegg(messageWithAttachments)
+        val splitResult = attachmentService.splitMsgHeadAndAttachments(messageWithAttachments)
 
         splitResult shouldNotBe null
-        splitResult.vedlegg.size shouldBe 3
+        splitResult.attachments.size shouldBe 3
+        splitResult.messageWithoutAttachment shouldContain "<MsgInfo>"
+        splitResult.messageWithoutAttachment shouldNotContain "<Base64Container"
     }
 
-    "should process fellesformat message when it does not contain attachments" {
-        val attachmentService = AttachmentService()
-
+    "should process XML message when it does not contain attachments" {
         val messageWithAttachments = String(Files.readAllBytes(Paths.get(MESSAGE_WITHOUT_ATTACHMENTS_PATH)))
 
-        val splitResult = attachmentService.splitMsgHeadAndVedlegg(messageWithAttachments)
+        val splitResult = attachmentService.splitMsgHeadAndAttachments(messageWithAttachments)
 
         splitResult shouldNotBe null
-        splitResult.vedlegg.size shouldBe 0
+        splitResult.attachments.size shouldBe 0
+        splitResult.messageWithoutAttachment shouldContain "<MsgInfo>"
     }
 })
