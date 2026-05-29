@@ -69,6 +69,15 @@ dependencies {
     implementation(libs.kotlin.kafka)
     implementation(libs.edi.adapter.client)
 
+    implementation("javax.xml.bind:jaxb-api:2.4.0-b180830.0359")
+    implementation("com.migesok:jaxb-java-time-adapters:1.1.3")
+
+    implementation("no.nav.helse.xml:xmlfellesformat2:1.0329dd1")
+    implementation("no.nav.helse.xml:kith-hodemelding:2019.07.30-12-26-5c924ef4f04022bbb850aaf299eb8e4464c1ca6a")
+    implementation("no.nav.helse.xml:dialogmelding:1.5d21db9")
+    implementation("no.nav.helse.xml:base64Container:1.5ac2176")
+    implementation("no.nav.helse.xml:kith-apprec:2019.07.30-04-23-2a0d1388209441ec05d2e92a821eed4f796a3ae2")
+
     testImplementation(testLibs.bundles.kotest)
     testImplementation(testLibs.kotest.assertions.arrow)
     testImplementation(testLibs.kotest.extensions.jvm)
