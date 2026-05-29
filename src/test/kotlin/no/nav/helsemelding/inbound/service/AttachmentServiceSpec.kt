@@ -16,10 +16,10 @@ class AttachmentServiceSpec : StringSpec({
 
         val messageWithAttachments = String(Files.readAllBytes(Paths.get(MESSAGE_WITH_ATTACHMENTS_PATH)))
 
-        val splitResult = attachmentService.splitFellesformatAndVedlegg(messageWithAttachments)
+        val splitResult = attachmentService.splitMsgHeadAndVedlegg(messageWithAttachments)
 
         splitResult shouldNotBe null
-        splitResult.vedlegg.size shouldBe 2
+        splitResult.vedlegg.size shouldBe 3
     }
 
     "should process fellesformat message when it does not contain attachments" {
@@ -27,7 +27,7 @@ class AttachmentServiceSpec : StringSpec({
 
         val messageWithAttachments = String(Files.readAllBytes(Paths.get(MESSAGE_WITHOUT_ATTACHMENTS_PATH)))
 
-        val splitResult = attachmentService.splitFellesformatAndVedlegg(messageWithAttachments)
+        val splitResult = attachmentService.splitMsgHeadAndVedlegg(messageWithAttachments)
 
         splitResult shouldNotBe null
         splitResult.vedlegg.size shouldBe 0

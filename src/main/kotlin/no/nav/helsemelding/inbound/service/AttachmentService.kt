@@ -5,8 +5,6 @@ import com.migesok.jaxb.adapter.javatime.LocalDateXmlAdapter
 import no.nav.helse.apprecV1.XMLAppRec
 import no.nav.helse.base64container.Base64Container
 import no.nav.helse.dialogmelding.XMLDialogmelding
-import no.nav.helse.eiFellesformat2.XMLEIFellesformat
-import no.nav.helse.eiFellesformat2.XMLMottakenhetBlokk
 import no.nav.helse.msgHead.XMLDocument
 import no.nav.helse.msgHead.XMLMsgHead
 import org.xml.sax.InputSource
@@ -30,30 +28,28 @@ class AttachmentService {
 
     private val PDF_MAGIC_NUMBER: ByteArray = HexFormat.of().parseHex("255044462D")
 
-    val fellesformatJaxBContext: JAXBContext = JAXBContext.newInstance(
-        XMLEIFellesformat::class.java,
+    val msgHeadJaxBContext: JAXBContext = JAXBContext.newInstance(
         XMLMsgHead::class.java,
-        XMLMottakenhetBlokk::class.java,
         XMLDialogmelding::class.java,
         Base64Container::class.java,
         XMLAppRec::class.java
     )
 
-    fun splitFellesformatAndVedlegg(fellesformatXml: String): SplitFellesformat {
-        val fellesformat = safeUnmarshal(fellesformatXml)
+    fun splitMsgHeadAndVedlegg(msgHeadXml: String): SplitMsgHead {
+        val msgHead = safeUnmarshal(msgHeadXml)
 
-        val vedlegg = extractValidVedlegg(fellesformat)
+        val vedlegg = extractValidVedlegg(msgHead)
             .map { it.toVedlegg() }
 
-        fellesformat.removeVedlegg()
+        msgHead.removeVedlegg()
 
-        return SplitFellesformat(
-            fellesformatWithoutVedlegg = fellesformat,
+        return SplitMsgHead(
+            msgHeadWithoutVedlegg = msgHead,
             vedlegg = vedlegg
         )
     }
 
-    fun safeUnmarshal(inputMessageText: String): XMLEIFellesformat {
+    fun safeUnmarshal(inputMessageText: String): XMLMsgHead {
         val spf = SAXParserFactory.newInstance()
         spf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
         spf.isNamespaceAware = true
@@ -63,28 +59,27 @@ class AttachmentService {
             InputSource(StringReader(inputMessageText))
         )
 
-        return getFellesformatUnmarshaller().unmarshal(xmlSource) as XMLEIFellesformat
+        return getMsgHeadUnmarshaller().unmarshal(xmlSource) as XMLMsgHead
     }
 
-    private fun extractValidVedlegg(fellesformat: XMLEIFellesformat): List<XMLDocument> =
-        extractAllVedlegg(fellesformat).filter {
+    private fun extractValidVedlegg(msgHead: XMLMsgHead): List<XMLDocument> =
+        extractAllVedlegg(msgHead).filter {
             it.isVedlegg() && it.pdfContentMatchesMimeType()
         }
 
-    private fun XMLEIFellesformat.removeVedlegg() {
-        val outerMsgHead = get<XMLMsgHead>()
-        val firstXmlDoc = outerMsgHead.document.firstOrNull { it.refDoc.msgType.v == "XML" }
-        val innerMsgHead = firstXmlDoc?.refDoc?.content?.any?.firstOrNull { it is XMLMsgHead } as? XMLMsgHead
+    private fun XMLMsgHead.removeVedlegg() {
+        document.removeAll { it.isVedlegg() }
 
-        if (innerMsgHead != null) {
-            innerMsgHead.document.removeAll { it.isVedlegg() }
-        } else {
-            outerMsgHead.document.removeAll { it.isVedlegg() }
+        document.forEach { document ->
+            document.refDoc.content.any.forEach {
+                if (it is XMLMsgHead) {
+                    it.removeVedlegg()
+                }
+            }
         }
     }
 
-    private fun extractAllVedlegg(fellesformat: XMLEIFellesformat): List<XMLDocument> {
-        val msgHead = fellesformat.get<XMLMsgHead>()
+    private fun extractAllVedlegg(msgHead: XMLMsgHead): List<XMLDocument> {
         val vedlegg = mutableListOf<XMLDocument>()
 
         vedlegg.addAll(extractAllVedleggFromMsgHead(msgHead))
@@ -100,14 +95,11 @@ class AttachmentService {
         return vedlegg
     }
 
-    private fun getFellesformatUnmarshaller(): Unmarshaller =
-        fellesformatJaxBContext.createUnmarshaller().apply {
+    private fun getMsgHeadUnmarshaller(): Unmarshaller =
+        msgHeadJaxBContext.createUnmarshaller().apply {
             setAdapter(LocalDateTimeXmlAdapter::class.java, XMLDateTimeAdapter())
             setAdapter(LocalDateXmlAdapter::class.java, XMLDateAdapter())
         }
-
-    private inline fun <reified T> XMLEIFellesformat.get(): T =
-        any.find { it is T } as T
 
     private fun extractAllVedleggFromMsgHead(msgHead: XMLMsgHead): List<XMLDocument> =
         msgHead.document.filter { it.isVedlegg() }
@@ -147,8 +139,8 @@ data class Vedlegg(
     val contentBase64: ByteArray
 )
 
-data class SplitFellesformat(
-    val fellesformatWithoutVedlegg: XMLEIFellesformat,
+data class SplitMsgHead(
+    val msgHeadWithoutVedlegg: XMLMsgHead,
     val vedlegg: List<Vedlegg>
 )
 
