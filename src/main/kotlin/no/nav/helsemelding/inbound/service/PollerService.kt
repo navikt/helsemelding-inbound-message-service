@@ -29,6 +29,7 @@ private val tracer = GlobalOpenTelemetry.getTracer("PollerService")
 class PollerService(
     private val ediAdapterClient: EdiAdapterClient,
     private val messagePublisher: MessagePublisher,
+    private val attachmentService: AttachmentService,
     private val metrics: Metrics
 ) {
     private val pollerConfig = config().poller
@@ -103,7 +104,10 @@ class PollerService(
 
         val businessDocument = getBusinessDocument(messageId) ?: return false
 
-        val isPublishingSuccessful = publishMessageToKafka(messageId, businessDocument)
+        val payload = String(Base64.getDecoder().decode(businessDocument))
+        val splitMessage = attachmentService.splitMsgHeadAndAttachments(payload)
+
+        val isPublishingSuccessful = publishMessageToKafka(messageId, splitMessage.messageWithoutAttachment)
         if (!isPublishingSuccessful) return false
 
         val isMarkedAsRead = markMessageAsRead(messageId, receiverHerId)
@@ -161,11 +165,10 @@ class PollerService(
         }
     }
 
-    private suspend fun publishMessageToKafka(messageId: Uuid, businessDocument: String): Boolean {
+    private suspend fun publishMessageToKafka(messageId: Uuid, payload: String): Boolean {
         val key = messageId.toString()
-        val payload = Base64.getDecoder().decode(businessDocument)
 
-        return messagePublisher.publish(key, payload)
+        return messagePublisher.publish(key, payload.toByteArray())
             .map {
                 log.info { "Successfully published message $key to Kafka." }
                 true

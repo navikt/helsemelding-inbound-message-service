@@ -16,7 +16,12 @@ import javax.xml.parsers.SAXParserFactory
 import javax.xml.transform.Source
 import javax.xml.transform.sax.SAXSource
 
-class MsgHeadMarshaller {
+interface MsgHeadSerializer {
+    fun deserialize(inputMessageXML: String): XMLMsgHead
+    fun serialize(msgHead: XMLMsgHead): String
+}
+
+class JaxbMsgHeadSerializer : MsgHeadSerializer {
     private val msgHeadJaxBContext: JAXBContext = JAXBContext.newInstance(
         XMLMsgHead::class.java,
         XMLDialogmelding::class.java,
@@ -24,7 +29,7 @@ class MsgHeadMarshaller {
         XMLAppRec::class.java
     )
 
-    fun unmarshalXML(inputMessageXML: String): XMLMsgHead {
+    override fun deserialize(inputMessageXML: String): XMLMsgHead {
         val spf = configureParserFactory()
         val unmarshaller = configureUnmarshaller()
 
@@ -36,7 +41,7 @@ class MsgHeadMarshaller {
         return unmarshaller.unmarshal(xmlSource) as XMLMsgHead
     }
 
-    fun marshalMsgHead(msgHead: XMLMsgHead): String {
+    override fun serialize(msgHead: XMLMsgHead): String {
         val stringWriter = StringWriter()
         val marshaller = configureMarshaller()
 
