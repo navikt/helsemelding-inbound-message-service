@@ -8,43 +8,45 @@ import java.util.HexFormat
 
 private val PDF_MAGIC_NUMBER: ByteArray = HexFormat.of().parseHex("255044462D")
 
-fun XMLMsgHead.extractValidVedlegg(): List<XMLDocument> =
-    this.extractAllVedlegg().filter {
-        it.isVedlegg() && it.pdfContentMatchesMimeType()
+fun XMLMsgHead.extractValidAttachments(): List<XMLDocument> =
+    this.extractAllAttachments().filter {
+        it.isAttachment() && it.pdfContentMatchesMimeType()
     }
 
-fun XMLMsgHead.extractAllVedlegg(): List<XMLDocument> {
-    val vedlegg = mutableListOf<XMLDocument>()
+fun XMLMsgHead.extractAllAttachments(): List<XMLDocument> {
+    val attachments = mutableListOf<XMLDocument>()
 
-    vedlegg.addAll(this.extractAllVedleggFromMsgHead())
-
-    this.document.forEach { document ->
-        document.refDoc.content.any.forEach {
-            if (it is XMLMsgHead) {
-                vedlegg.addAll(this.extractAllVedleggFromMsgHead())
-            }
-        }
-    }
-
-    return vedlegg
-}
-
-fun XMLMsgHead.extractAllVedleggFromMsgHead(): List<XMLDocument> =
-    this.document.filter { it.isVedlegg() }
-
-fun XMLMsgHead.removeVedlegg() {
-    document.removeAll { it.isVedlegg() }
+    attachments.addAll(extractAllAttachmentsFromMsgHead())
 
     document.forEach { document ->
         document.refDoc.content.any.forEach {
             if (it is XMLMsgHead) {
-                it.removeVedlegg()
+                attachments.addAll(it.extractAllAttachments())
+            }
+        }
+    }
+
+    return attachments
+}
+
+fun XMLMsgHead.extractAllAttachmentsFromMsgHead(): List<XMLDocument> =
+    this.document.filter { it.isAttachment() }
+
+fun XMLMsgHead.removeAttachments() {
+    document.removeAll { xmlDocument ->
+        xmlDocument.isAttachment()
+    }
+
+    document.forEach { xmlDocument ->
+        xmlDocument.refDoc.content.any.forEach { content ->
+            if (content is XMLMsgHead) {
+                content.removeAttachments()
             }
         }
     }
 }
 
-fun XMLDocument.isVedlegg(): Boolean =
+fun XMLDocument.isAttachment(): Boolean =
     refDoc.msgType.v == "A" &&
         listOf(
             "application/pdf",
@@ -56,7 +58,7 @@ fun XMLDocument.isVedlegg(): Boolean =
             "image/pjpg"
         ).contains(refDoc.mimeType)
 
-fun XMLDocument.toVedlegg(): Attachment =
+fun XMLDocument.toAttachment(): Attachment =
     Attachment(
         description = refDoc.description ?: "",
         contentType = refDoc.mimeType,

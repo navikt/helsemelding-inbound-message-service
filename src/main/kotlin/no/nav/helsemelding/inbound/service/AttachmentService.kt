@@ -2,9 +2,9 @@ package no.nav.helsemelding.inbound.service
 
 import no.nav.helsemelding.inbound.model.SplitMessage
 import no.nav.helsemelding.inbound.xml.MsgHeadSerializer
-import no.nav.helsemelding.inbound.xml.extractValidVedlegg
-import no.nav.helsemelding.inbound.xml.removeVedlegg
-import no.nav.helsemelding.inbound.xml.toVedlegg
+import no.nav.helsemelding.inbound.xml.extractValidAttachments
+import no.nav.helsemelding.inbound.xml.removeAttachments
+import no.nav.helsemelding.inbound.xml.toAttachment
 
 interface AttachmentService {
     fun splitMsgHeadAndAttachments(msgHeadXml: String): SplitMessage
@@ -16,10 +16,10 @@ class DomAttachmentService(
     override fun splitMsgHeadAndAttachments(msgHeadXml: String): SplitMessage {
         val msgHead = msgHeadSerializer.deserialize(msgHeadXml)
 
-        val attachments = msgHead.extractValidVedlegg()
-            .map { it.toVedlegg() }
+        val attachments = msgHead.extractValidAttachments()
+            .map { it.toAttachment() }
 
-        msgHead.removeVedlegg()
+        msgHead.removeAttachments()
 
         return SplitMessage(
             messageWithoutAttachment = msgHeadSerializer.serialize(msgHead),
