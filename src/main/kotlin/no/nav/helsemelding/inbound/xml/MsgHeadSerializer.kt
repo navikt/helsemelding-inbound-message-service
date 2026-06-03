@@ -16,6 +16,8 @@ import javax.xml.parsers.SAXParserFactory
 import javax.xml.transform.Source
 import javax.xml.transform.sax.SAXSource
 
+const val DISALLOW_DOCTYPE_DECLARATION = "http://apache.org/xml/features/disallow-doctype-decl"
+
 interface MsgHeadSerializer {
     fun deserialize(inputMessageXML: String): XMLMsgHead
     fun serialize(msgHead: XMLMsgHead): String
@@ -30,11 +32,11 @@ class JaxbMsgHeadSerializer : MsgHeadSerializer {
     )
 
     override fun deserialize(inputMessageXML: String): XMLMsgHead {
-        val spf = configureParserFactory()
+        val parserFactory = configureParserFactory()
         val unmarshaller = configureUnmarshaller()
 
         val xmlSource: Source = SAXSource(
-            spf.newSAXParser().xmlReader,
+            parserFactory.newSAXParser().xmlReader,
             InputSource(StringReader(inputMessageXML))
         )
 
@@ -63,7 +65,7 @@ class JaxbMsgHeadSerializer : MsgHeadSerializer {
 
     private fun configureParserFactory(): SAXParserFactory {
         val parserFactory = SAXParserFactory.newInstance()
-        parserFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        parserFactory.setFeature(DISALLOW_DOCTYPE_DECLARATION, true)
         parserFactory.isNamespaceAware = true
 
         return parserFactory

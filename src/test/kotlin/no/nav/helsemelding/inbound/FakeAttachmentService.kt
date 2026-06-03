@@ -6,7 +6,7 @@ import no.nav.helsemelding.inbound.service.AttachmentService
 class FakeAttachmentService() : AttachmentService {
     private var splitMessage: SplitMessage? = null
 
-    fun giveSplitMessage(splitMessage: SplitMessage) {
+    fun givenSplitMessage(splitMessage: SplitMessage) {
         this.splitMessage = splitMessage
     }
 

@@ -102,7 +102,7 @@ class PollerServiceSpec : StringSpec(
                 messageWithoutAttachment = xml,
                 attachments = emptyList()
             )
-            attachmentService.giveSplitMessage(splitMessage)
+            attachmentService.givenSplitMessage(splitMessage)
 
             val message = Message(
                 id = uuid,
@@ -164,7 +164,7 @@ class PollerServiceSpec : StringSpec(
                 messageWithoutAttachment = xml,
                 attachments = emptyList()
             )
-            attachmentService.giveSplitMessage(splitMessage)
+            attachmentService.givenSplitMessage(splitMessage)
 
             val message = Message(
                 id = uuid,
@@ -204,7 +204,7 @@ class PollerServiceSpec : StringSpec(
                 messageWithoutAttachment = xml,
                 attachments = emptyList()
             )
-            attachmentService.giveSplitMessage(splitMessage)
+            attachmentService.givenSplitMessage(splitMessage)
 
             val message = Message(
                 id = uuid,
@@ -247,7 +247,7 @@ class PollerServiceSpec : StringSpec(
                 messageWithoutAttachment = xml,
                 attachments = emptyList()
             )
-            attachmentService.giveSplitMessage(splitMessage)
+            attachmentService.givenSplitMessage(splitMessage)
 
             val message = Message(
                 id = uuid,

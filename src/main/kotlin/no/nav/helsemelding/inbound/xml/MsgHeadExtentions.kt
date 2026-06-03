@@ -4,16 +4,20 @@ import no.nav.helse.base64container.Base64Container
 import no.nav.helse.msgHead.XMLDocument
 import no.nav.helse.msgHead.XMLMsgHead
 import no.nav.helsemelding.inbound.model.Attachment
-import java.util.HexFormat
 
-private val PDF_MAGIC_NUMBER: ByteArray = HexFormat.of().parseHex("255044462D")
+const val ATTACHMENT_TYPE = "A"
 
-fun XMLMsgHead.extractValidAttachments(): List<XMLDocument> =
-    this.extractAllAttachments().filter {
-        it.isAttachment() && it.pdfContentMatchesMimeType()
-    }
+private val acceptedMimeTypes = listOf(
+    "application/pdf",
+    "image/tiff",
+    "image/png",
+    "image/jpeg",
+    "image/pjpeg",
+    "image/jpg",
+    "image/pjpg"
+)
 
-fun XMLMsgHead.extractAllAttachments(): List<XMLDocument> {
+fun XMLMsgHead.extractAttachments(): List<XMLDocument> {
     val attachments = mutableListOf<XMLDocument>()
 
     attachments.addAll(extractAllAttachmentsFromMsgHead())
@@ -21,7 +25,7 @@ fun XMLMsgHead.extractAllAttachments(): List<XMLDocument> {
     document.forEach { document ->
         document.refDoc.content.any.forEach {
             if (it is XMLMsgHead) {
-                attachments.addAll(it.extractAllAttachments())
+                attachments.addAll(it.extractAttachments())
             }
         }
     }
@@ -47,16 +51,7 @@ fun XMLMsgHead.removeAttachments() {
 }
 
 fun XMLDocument.isAttachment(): Boolean =
-    refDoc.msgType.v == "A" &&
-        listOf(
-            "application/pdf",
-            "image/tiff",
-            "image/png",
-            "image/jpeg",
-            "image/pjpeg",
-            "image/jpg",
-            "image/pjpg"
-        ).contains(refDoc.mimeType)
+    refDoc.msgType.v == ATTACHMENT_TYPE && acceptedMimeTypes.contains(refDoc.mimeType)
 
 fun XMLDocument.toAttachment(): Attachment =
     Attachment(
@@ -65,11 +60,5 @@ fun XMLDocument.toAttachment(): Attachment =
         contentBase64 = String(toBase64Container().value)
     )
 
-fun XMLDocument.pdfContentMatchesMimeType(): Boolean =
-    refDoc.mimeType != "application/pdf" || toBase64Container().value.binaryContentIsPdf()
-
 fun XMLDocument.toBase64Container(): Base64Container =
     refDoc.content.any[0] as Base64Container
-
-fun ByteArray.binaryContentIsPdf(): Boolean =
-    copyOf(PDF_MAGIC_NUMBER.size) contentEquals PDF_MAGIC_NUMBER
