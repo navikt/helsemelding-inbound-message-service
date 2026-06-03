@@ -107,9 +107,6 @@ class PollerService(
         val payload = String(Base64.getDecoder().decode(businessDocument))
         val splitMessage = attachmentService.splitMsgHeadAndAttachments(payload)
 
-        // TODO: Debug logging. Remove before merging.
-        log.debug { "Attachments extracted from message $messageId : ${splitMessage.attachments.size} attachments." }
-
         val isPublishingSuccessful = publishMessageToKafka(messageId, splitMessage.messageWithoutAttachment)
         if (!isPublishingSuccessful) return false
 
