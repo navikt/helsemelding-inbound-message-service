@@ -22,7 +22,7 @@ class DomAttachmentService(
         msgHead.removeAttachments()
 
         return SplitMessage(
-            messageWithoutAttachment = msgHeadSerializer.serialize(msgHead),
+            messageWithoutAttachmentXml = msgHeadSerializer.serialize(msgHead),
             attachments = attachments
         )
     }

@@ -24,8 +24,8 @@ class DomAttachmentServiceSpec : StringSpec({
 
         splitResult shouldNotBe null
         splitResult.attachments.size shouldBe 3
-        splitResult.messageWithoutAttachment shouldContain "<MsgInfo>"
-        splitResult.messageWithoutAttachment shouldNotContain "<Base64Container"
+        splitResult.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
+        splitResult.messageWithoutAttachmentXml shouldNotContain "Base64Container"
     }
 
     "should process XML message when it does not contain attachments" {
@@ -35,6 +35,6 @@ class DomAttachmentServiceSpec : StringSpec({
 
         splitResult shouldNotBe null
         splitResult.attachments.size shouldBe 0
-        splitResult.messageWithoutAttachment shouldContain "<MsgInfo>"
+        splitResult.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
     }
 })

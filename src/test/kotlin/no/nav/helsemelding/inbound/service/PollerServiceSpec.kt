@@ -99,7 +99,7 @@ class PollerServiceSpec : StringSpec(
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
             val splitMessage = SplitMessage(
-                messageWithoutAttachment = xml,
+                messageWithoutAttachmentXml = xml,
                 attachments = emptyList()
             )
             attachmentService.givenSplitMessage(splitMessage)
@@ -161,7 +161,7 @@ class PollerServiceSpec : StringSpec(
             publisher.givenPublishingResult(Result.failure(RuntimeException("Kafka unavailable")))
 
             val splitMessage = SplitMessage(
-                messageWithoutAttachment = xml,
+                messageWithoutAttachmentXml = xml,
                 attachments = emptyList()
             )
             attachmentService.givenSplitMessage(splitMessage)
@@ -201,7 +201,7 @@ class PollerServiceSpec : StringSpec(
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
             val splitMessage = SplitMessage(
-                messageWithoutAttachment = xml,
+                messageWithoutAttachmentXml = xml,
                 attachments = emptyList()
             )
             attachmentService.givenSplitMessage(splitMessage)
@@ -244,7 +244,7 @@ class PollerServiceSpec : StringSpec(
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
             val splitMessage = SplitMessage(
-                messageWithoutAttachment = xml,
+                messageWithoutAttachmentXml = xml,
                 attachments = emptyList()
             )
             attachmentService.givenSplitMessage(splitMessage)
