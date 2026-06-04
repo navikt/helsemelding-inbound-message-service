@@ -68,7 +68,7 @@ dependencies {
     implementation(libs.token.validation.ktor.v3)
     implementation(libs.kotlin.kafka)
     implementation(libs.edi.adapter.client)
-    implementation("no.nav.helsemelding:attachment-client:0.0.1-SNAPSHOT-3")
+    implementation("no.nav.helsemelding:attachment-client:0.0.1")
 
     testImplementation(testLibs.bundles.kotest)
     testImplementation(testLibs.kotest.assertions.arrow)
