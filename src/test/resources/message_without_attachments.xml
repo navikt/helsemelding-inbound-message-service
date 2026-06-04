@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- -->
+<!-- Dette er en testmelding med fiktive personer -->
+<!-- -->
+<MsgHead xmlns="http://www.kith.no/xmlstds/msghead/2006-05-24" xmlns:xsd="http://www.w3.org/2001/XMLSchema.xsd" xmlns:fk1="http://www.kith.no/xmlstds/felleskomponent1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.kith.no/xmlstds/msghead/2006-05-24 MsgHead-v1_2.xsd">
+    <MsgInfo>
+        <Type V="DIALOG_FORESPORSEL" DN="Forespørsel"/>
+        <MIGversion>v1.2 2006-05-24</MIGversion>
+        <GenDate>2026-05-29T13:08:28.362235098+02:00</GenDate>
+        <MsgId>516a02d8-dce6-4f02-8be2-a7bbe6144a58</MsgId>
+        <Sender>
+            <Organisation>
+                <OrganisationName>ARBEIDS- OG VELFERDSETATEN</OrganisationName>
+                <Ident>
+                    <Id>90128</Id>
+                    <TypeId V="HER" DN="HER-id" S="2.16.578.1.12.4.1.1.9051"/>
+                </Ident>
+                <Organisation>
+                    <OrganisationName>Samhandling Arbeids- og velferdsetaten</OrganisationName>
+                    <Ident>
+                        <Id>8142520</Id>
+                        <TypeId V="HER" DN="HER-id" S="2.16.578.1.12.4.1.1.9051"/>
+                    </Ident>
+                </Organisation>
+            </Organisation>
+        </Sender>
+        <Receiver>
+            <Organisation>
+                <OrganisationName>ARBEIDS- OG VELFERDSETATEN</OrganisationName>
+                <Ident>
+                    <Id>90128</Id>
+                    <TypeId V="HER" DN="HER-id" S="2.16.578.1.12.4.1.1.9051"/>
+                </Ident>
+                <Organisation>
+                    <OrganisationName>Samhandling Arbeids- og velferdsetaten</OrganisationName>
+                    <Ident>
+                        <Id>8142519</Id>
+                        <TypeId V="HER" DN="HER-id" S="2.16.578.1.12.4.1.1.9051"/>
+                    </Ident>
+                </Organisation>
+            </Organisation>
+        </Receiver>
+        <Patient>
+            <FamilyName>Jord</FamilyName>
+            <GivenName>Jan</GivenName>
+            <DateOfBirth>1972-12-31</DateOfBirth>
+            <Sex V="2" DN="Kvinne"/>
+            <Ident>
+                <Id>31777207884</Id>
+                <TypeId V="FNR" DN="Fødselsnummer" S="2.16.578.1.12.4.1.1.8116"/>
+            </Ident>
+        </Patient>
+    </MsgInfo>
+    <Document>
+        <RefDoc>
+            <IssueDate V="2018-01-24T10:10:47"/>
+            <MsgType V="XML" DN="XML-instans"/>
+            <Content>
+                <Dialogmelding xmlns="http://www.kith.no/xmlstds/dialog/2006-10-11" xmlns:xsd="http://www.w3.org/2001/XMLSchema.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.kith.no/xmlstds/dialog/2006-10-11 dialogmelding.xsd">
+                    <Foresporsel>
+                        <TypeForesp V="99" DN="Annen henvendelse" S="2.16.578.1.12.4.1.1.9152"/>
+                        <Sporsmal>Kan du skrive ut en henvisning til fysioterapi?</Sporsmal>
+                        <RollerRelatertNotat>
+                            <RoleToPatient DN="Primærkontakt" V="9" S="2.16.578.1.12.4.1.1.9034"/>
+                            <HealthcareProfessional>
+                                <TypeHealthcareProfessional DN="Sykepleier" V="SP"/>
+                                <FamilyName>Sykepleier</FamilyName>
+                                <GivenName>Sannsynlig</GivenName>
+                                <Ident>
+                                    <fk1:Id>565600344</fk1:Id>
+                                    <fk1:TypeId V="HPR" DN="HPR-nummer" S="2.16.578.1.12.4.1.1.8116" />
+                                </Ident>
+                                <TeleCom>
+                                    <fk1:TeleAddress V="tel:72727272"></fk1:TeleAddress>
+                                </TeleCom>
+                            </HealthcareProfessional>
+                        </RollerRelatertNotat>
+                    </Foresporsel>
+                </Dialogmelding>
+            </Content>
+        </RefDoc>
+    </Document>
+
+</MsgHead>

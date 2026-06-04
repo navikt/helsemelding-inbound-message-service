@@ -8,8 +8,10 @@ import no.nav.helsemelding.ediadapter.model.ErrorMessage
 import no.nav.helsemelding.ediadapter.model.GetBusinessDocumentResponse
 import no.nav.helsemelding.ediadapter.model.Message
 import no.nav.helsemelding.ediadapter.model.Metadata
+import no.nav.helsemelding.inbound.FakeAttachmentService
 import no.nav.helsemelding.inbound.FakeMessagePublisher
 import no.nav.helsemelding.inbound.metrics.FakeMetrics
+import no.nav.helsemelding.inbound.model.SplitMessage
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
 import java.util.Base64
@@ -22,13 +24,16 @@ class PollerServiceSpec : StringSpec(
         lateinit var ediAdapterClient: FakeEdiAdapterClient
         lateinit var publisher: FakeMessagePublisher
         lateinit var pollerService: PollerService
+        lateinit var attachmentService: FakeAttachmentService
 
         beforeEach {
             ediAdapterClient = FakeEdiAdapterClient()
             publisher = FakeMessagePublisher()
+            attachmentService = FakeAttachmentService()
             pollerService = PollerService(
                 ediAdapterClient,
                 publisher,
+                attachmentService,
                 FakeMetrics()
             )
         }
@@ -93,6 +98,12 @@ class PollerServiceSpec : StringSpec(
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
+            val splitMessage = SplitMessage(
+                messageWithoutAttachmentXml = xml,
+                attachments = emptyList()
+            )
+            attachmentService.givenSplitMessage(splitMessage)
+
             val message = Message(
                 id = uuid,
                 isAppRec = false,
@@ -149,6 +160,12 @@ class PollerServiceSpec : StringSpec(
 
             publisher.givenPublishingResult(Result.failure(RuntimeException("Kafka unavailable")))
 
+            val splitMessage = SplitMessage(
+                messageWithoutAttachmentXml = xml,
+                attachments = emptyList()
+            )
+            attachmentService.givenSplitMessage(splitMessage)
+
             val message = Message(
                 id = uuid,
                 isAppRec = false,
@@ -182,6 +199,12 @@ class PollerServiceSpec : StringSpec(
             ediAdapterClient.givenMarkAsRead(Left(errorMessage500))
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
+
+            val splitMessage = SplitMessage(
+                messageWithoutAttachmentXml = xml,
+                attachments = emptyList()
+            )
+            attachmentService.givenSplitMessage(splitMessage)
 
             val message = Message(
                 id = uuid,
@@ -219,6 +242,12 @@ class PollerServiceSpec : StringSpec(
             )
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
+
+            val splitMessage = SplitMessage(
+                messageWithoutAttachmentXml = xml,
+                attachments = emptyList()
+            )
+            attachmentService.givenSplitMessage(splitMessage)
 
             val message = Message(
                 id = uuid,

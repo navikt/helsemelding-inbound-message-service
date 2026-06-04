@@ -68,6 +68,9 @@ dependencies {
     implementation(libs.token.validation.ktor.v3)
     implementation(libs.kotlin.kafka)
     implementation(libs.edi.adapter.client)
+    implementation(libs.javax.jaxb.api)
+    implementation(libs.migesok.jaxb.time.adapters)
+    implementation(libs.bundles.nav.xml)
     implementation("no.nav.helsemelding:attachment-client:0.0.1")
 
     testImplementation(testLibs.bundles.kotest)
