@@ -1,5 +1,6 @@
 package no.nav.helsemelding.inbound.service
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import no.nav.helsemelding.attachmentclient.AttachmentClient
 import no.nav.helsemelding.inbound.model.Attachment
 import no.nav.helsemelding.inbound.model.SplitMessage
@@ -9,6 +10,8 @@ import no.nav.helsemelding.inbound.xml.removeAttachments
 import no.nav.helsemelding.inbound.xml.toAttachment
 import kotlin.uuid.Uuid
 import no.nav.helsemelding.attachmentmodel.model.Attachment as AttachmentDto
+
+private val log = KotlinLogging.logger {}
 
 interface AttachmentService {
     fun splitMsgHeadAndAttachments(msgHeadXml: String): SplitMessage
@@ -44,7 +47,15 @@ class DomAttachmentService(
             )
         }
 
-        attachmentClient.saveAttachments(messageId, attachmentDtos)
+        val response = attachmentClient.saveAttachments(messageId, attachmentDtos)
+
+        if (response.isFailure) {
+            val exception = response.exceptionOrNull()
+            log.error(exception) { "Attachment test: Failed to save attachments for messageId: $messageId. Error: ${exception?.message}" }
+            return false
+        }
+
+        log.debug { "Attachment test: Saved attachments for messageId: $messageId" }
 
         return true
     }
