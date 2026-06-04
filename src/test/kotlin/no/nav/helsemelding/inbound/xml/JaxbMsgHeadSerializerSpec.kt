@@ -6,8 +6,10 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import no.nav.helse.msgHead.XMLMsgHead
+import org.xml.sax.SAXParseException
 import java.nio.file.Files
 import java.nio.file.Paths
+import javax.xml.bind.UnmarshalException
 
 private const val XML_MESSAGE_PATH = "src/test/resources/message_with_attachments.xml"
 private const val XML_MESSAGE_WITH_DOCTYPE_PATH = "src/test/resources/message_with_doctype.xml"
@@ -52,8 +54,14 @@ class JaxbMsgHeadSerializerSpec : StringSpec({
     "should reject XML with doctype declaration" {
         val messageXml = String(Files.readAllBytes(Paths.get(XML_MESSAGE_WITH_DOCTYPE_PATH)))
 
-        shouldThrowAny {
+        val exception = shouldThrowAny {
             serializer.deserialize(messageXml)
         }
+
+        exception::class shouldBe UnmarshalException::class
+
+        val rootException = exception.cause!!
+        rootException::class shouldBe SAXParseException::class
+        rootException.message shouldContain "DOCTYPE is disallowed"
     }
 })
