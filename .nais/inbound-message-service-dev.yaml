@@ -67,7 +67,7 @@ spec:
         - application: edi-adapter
           cluster: dev-gcp
         - application: attachment-service
-          namespace: dev-gcp
+          cluster: dev-gcp
     inbound:
       rules:
         - application: azure-token-generator
