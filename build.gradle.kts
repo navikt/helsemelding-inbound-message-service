@@ -68,6 +68,7 @@ dependencies {
     implementation(libs.token.validation.ktor.v3)
     implementation(libs.kotlin.kafka)
     implementation(libs.edi.adapter.client)
+    implementation(libs.attachment.client)
     implementation(libs.javax.jaxb.api)
     implementation(libs.migesok.jaxb.time.adapters)
     implementation(libs.bundles.nav.xml)

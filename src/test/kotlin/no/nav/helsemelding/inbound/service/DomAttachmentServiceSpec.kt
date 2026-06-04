@@ -5,6 +5,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import no.nav.helsemelding.inbound.FakeAttachmentClient
 import no.nav.helsemelding.inbound.xml.JaxbMsgHeadSerializer
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -15,7 +16,8 @@ private val MESSAGE_WITHOUT_ATTACHMENTS_PATH = "src/test/resources/message_witho
 class DomAttachmentServiceSpec : StringSpec({
 
     val msgHeadSerializer = JaxbMsgHeadSerializer()
-    val attachmentService = DomAttachmentService(msgHeadSerializer)
+    val attachmentClient = FakeAttachmentClient()
+    val attachmentService = DomAttachmentService(msgHeadSerializer, attachmentClient)
 
     "should split XML message and attachments" {
         val messageWithAttachments = String(Files.readAllBytes(Paths.get(MESSAGE_WITH_ATTACHMENTS_PATH)))
