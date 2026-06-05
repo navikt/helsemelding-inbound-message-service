@@ -42,26 +42,31 @@ class DomAttachmentService(
     }
 
     override suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Boolean {
-        if (attachments.isEmpty()) return true
+        try {
+            if (attachments.isEmpty()) return true
 
-        val attachmentDtoList = attachments.map {
-            AttachmentDto(
-                description = it.description,
-                contentType = it.contentType,
-                contentBase64 = it.contentBase64
-            )
-        }
+            val attachmentDtoList = attachments.map {
+                AttachmentDto(
+                    description = it.description,
+                    contentType = it.contentType,
+                    contentBase64 = it.contentBase64
+                )
+            }
 
-        val response = attachmentClient.saveAttachments(messageId, attachmentDtoList)
+            val response = attachmentClient.saveAttachments(messageId, attachmentDtoList)
 
-        if (response.isFailure) {
-            val exception = response.exceptionOrNull()
-            log.error(exception) { "Attachment test: Failed to save attachments for messageId: $messageId. Error: ${exception?.message}" }
+            if (response.isFailure) {
+                val exception = response.exceptionOrNull()
+                log.error(exception) { "Attachment test: Failed to save attachments for messageId: $messageId. Error: ${exception?.message}" }
+                return false
+            }
+
+            log.debug { "Attachment test: Saved attachments for messageId: $messageId" }
+
+            return true
+        } catch (e: Exception) {
+            log.error(e) { "Attachment test: Failed to save attachments for messageId: $messageId. Error: ${e.message}" }
             return false
         }
-
-        log.debug { "Attachment test: Saved attachments for messageId: $messageId" }
-
-        return true
     }
 }

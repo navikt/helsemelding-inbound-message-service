@@ -7,16 +7,21 @@ import kotlin.uuid.Uuid
 
 class FakeAttachmentService() : AttachmentService {
     private var splitMessage: SplitMessage? = null
+    private var saveAttachmentResult: Boolean = true
 
-    fun givenSplitMessage(splitMessage: SplitMessage) {
+    fun givenSplitMessage(splitMessage: SplitMessage?) {
         this.splitMessage = splitMessage
     }
 
-    override fun splitMsgHeadAndAttachments(msgHeadXml: String): SplitMessage {
-        return splitMessage!!
+    fun givenSaveAttachmentsResult(result: Boolean) {
+        this.saveAttachmentResult = result
+    }
+
+    override fun splitMsgHeadAndAttachments(msgHeadXml: String): SplitMessage? {
+        return splitMessage
     }
 
     override suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Boolean {
-        return true
+        return saveAttachmentResult
     }
 }

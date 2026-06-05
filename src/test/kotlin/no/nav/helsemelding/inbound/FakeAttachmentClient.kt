@@ -5,11 +5,17 @@ import no.nav.helsemelding.attachmentmodel.model.Attachment
 import kotlin.uuid.Uuid
 
 class FakeAttachmentClient : AttachmentClient {
+    var saveAttachmentsResult: Result<Unit>? = null
+
+    fun givenSaveAttachmentsResult(result: Result<Unit>) {
+        saveAttachmentsResult = result
+    }
+
     override suspend fun saveAttachments(
         messageId: Uuid,
         attachments: List<Attachment>
     ): Result<Unit> {
-        return Result.success(Unit)
+        return saveAttachmentsResult!!
     }
 
     override suspend fun getAttachments(messageId: Uuid): Result<List<Attachment>> {
