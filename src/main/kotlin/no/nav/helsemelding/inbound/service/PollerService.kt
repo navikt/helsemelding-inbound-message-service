@@ -102,12 +102,10 @@ class PollerService(
         log.info { "Processing incoming message: $messageId" }
         metrics.registerIncomingMessageReceived()
 
-        val businessDocument = getBusinessDocument(messageId) ?: return false
+        val businessDocumentBase64 = getBusinessDocument(messageId) ?: return false
 
-        val payload = String(Base64.getDecoder().decode(businessDocument))
-        val splitMessage = attachmentService.splitMsgHeadAndAttachments(payload)
-
-        log.debug { "Attachment test: Attachments found for message: $messageId : ${splitMessage.attachments}" }
+        val businessDocument = String(Base64.getDecoder().decode(businessDocumentBase64))
+        val splitMessage = attachmentService.splitMsgHeadAndAttachments(businessDocument) ?: return false
 
         val isAttachmentSaved = attachmentService.saveAttachments(messageId, splitMessage.attachments)
         if (!isAttachmentSaved) return false

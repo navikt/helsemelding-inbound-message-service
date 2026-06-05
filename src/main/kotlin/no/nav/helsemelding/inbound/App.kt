@@ -11,7 +11,6 @@ import io.ktor.server.netty.Netty
 import io.ktor.utils.io.CancellationException
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import kotlinx.coroutines.awaitCancellation
-import no.nav.helsemelding.attachmentclient.HttpAttachmentClient
 import no.nav.helsemelding.inbound.metrics.CustomMetrics
 import no.nav.helsemelding.inbound.plugin.configureMetrics
 import no.nav.helsemelding.inbound.plugin.configureRoutes
@@ -37,8 +36,7 @@ fun main() = SuspendApp {
 
             val dialogMessagePublisher = DialogMessagePublisher(deps.kafkaPublisher)
             val msgHeadSerializer = JaxbMsgHeadSerializer()
-            val attachmentClient = HttpAttachmentClient()
-            val attachmentService = DomAttachmentService(msgHeadSerializer, attachmentClient)
+            val attachmentService = DomAttachmentService(msgHeadSerializer, deps.attachmentClient)
 
             val poller = PollerService(
                 deps.ediAdapterClient,

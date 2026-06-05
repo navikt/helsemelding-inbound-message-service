@@ -25,7 +25,7 @@ class DomAttachmentServiceSpec : StringSpec({
         val splitResult = attachmentService.splitMsgHeadAndAttachments(messageWithAttachments)
 
         splitResult shouldNotBe null
-        splitResult.attachments.size shouldBe 3
+        splitResult!!.attachments.size shouldBe 3
         splitResult.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
         splitResult.messageWithoutAttachmentXml shouldNotContain "Base64Container"
     }
@@ -36,7 +36,7 @@ class DomAttachmentServiceSpec : StringSpec({
         val splitResult = attachmentService.splitMsgHeadAndAttachments(messageWithAttachments)
 
         splitResult shouldNotBe null
-        splitResult.attachments.size shouldBe 0
+        splitResult!!.attachments.size shouldBe 0
         splitResult.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
     }
 })
