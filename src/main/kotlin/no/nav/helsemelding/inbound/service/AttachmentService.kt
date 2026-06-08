@@ -57,15 +57,13 @@ class DomAttachmentService(
 
             if (response.isFailure) {
                 val exception = response.exceptionOrNull()
-                log.error(exception) { "Attachment test: Failed to save attachments for messageId: $messageId. Error: ${exception?.message}" }
+                log.error(exception) { "Failed to save attachments for messageId: $messageId. Error: ${exception?.message}" }
                 return false
             }
 
-            log.debug { "Attachment test: Saved attachments for messageId: $messageId" }
-
             return true
         } catch (e: Exception) {
-            log.error(e) { "Attachment test: Failed to save attachments for messageId: $messageId. Error: ${e.message}" }
+            log.error(e) { "Failed to save attachments for messageId: $messageId. Error: ${e.message}" }
             return false
         }
     }
