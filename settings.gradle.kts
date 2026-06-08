@@ -27,7 +27,7 @@ dependencyResolutionManagement {
             version("opentelemetry-extension-kotlin", "1.58.0")
             version("kotlin-kafka", "0.4.1")
             version("edi-adapter-client", "0.0.5")
-            version("attachment-client", "0.0.1")
+            version("attachment-client", "0.0.2")
             version("jaxb-api", "2.4.0-b180830.0359")
             version("migesok-time-adapters", "1.1.3")
 
