@@ -28,11 +28,11 @@ class DomAttachmentServiceSpec : StringSpec({
 
         splitResult.isSuccess shouldBe true
 
-        val spritMessage = splitResult.getOrNull()
-        spritMessage shouldNotBe null
-        spritMessage!!.attachments.size shouldBe 3
-        spritMessage.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
-        spritMessage.messageWithoutAttachmentXml shouldNotContain "Base64Container"
+        val splitMessage = splitResult.getOrNull()
+        splitMessage shouldNotBe null
+        splitMessage!!.attachments.size shouldBe 3
+        splitMessage.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
+        splitMessage.messageWithoutAttachmentXml shouldNotContain "Base64Container"
     }
 
     "splitMsgHeadAndAttachments should process XML message when it does not contain attachments" {
@@ -42,10 +42,10 @@ class DomAttachmentServiceSpec : StringSpec({
 
         splitResult.isSuccess shouldBe true
 
-        val spritMessage = splitResult.getOrNull()
-        spritMessage shouldNotBe null
-        spritMessage!!.attachments.size shouldBe 0
-        spritMessage.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
+        val splitMessage = splitResult.getOrNull()
+        splitMessage shouldNotBe null
+        splitMessage!!.attachments.size shouldBe 0
+        splitMessage.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
     }
 
     "saveAttachments should return true if attachment are saved successfully" {
