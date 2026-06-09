@@ -4,6 +4,7 @@ import no.nav.helse.base64container.Base64Container
 import no.nav.helse.msgHead.XMLDocument
 import no.nav.helse.msgHead.XMLMsgHead
 import no.nav.helsemelding.inbound.model.Attachment
+import java.util.Base64
 
 const val ATTACHMENT_TYPE = "A"
 
@@ -57,7 +58,7 @@ fun XMLDocument.toAttachment(): Attachment =
     Attachment(
         description = refDoc.description ?: "",
         contentType = refDoc.mimeType,
-        contentBase64 = String(toBase64Container().value)
+        contentBase64 = Base64.getEncoder().encodeToString(toBase64Container().value)
     )
 
 fun XMLDocument.toBase64Container(): Base64Container =

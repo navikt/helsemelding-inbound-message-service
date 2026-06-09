@@ -5,9 +5,12 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import no.nav.helsemelding.inbound.FakeAttachmentClient
+import no.nav.helsemelding.inbound.model.Attachment
 import no.nav.helsemelding.inbound.xml.JaxbMsgHeadSerializer
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.uuid.Uuid
 
 private val MESSAGE_WITH_ATTACHMENTS_PATH = "src/test/resources/message_with_attachments.xml"
 private val MESSAGE_WITHOUT_ATTACHMENTS_PATH = "src/test/resources/message_without_attachments.xml"
@@ -15,26 +18,76 @@ private val MESSAGE_WITHOUT_ATTACHMENTS_PATH = "src/test/resources/message_witho
 class DomAttachmentServiceSpec : StringSpec({
 
     val msgHeadSerializer = JaxbMsgHeadSerializer()
-    val attachmentService = DomAttachmentService(msgHeadSerializer)
+    val attachmentClient = FakeAttachmentClient()
+    val attachmentService = DomAttachmentService(msgHeadSerializer, attachmentClient)
 
-    "should split XML message and attachments" {
+    "splitMsgHeadAndAttachments should split XML message and attachments" {
         val messageWithAttachments = String(Files.readAllBytes(Paths.get(MESSAGE_WITH_ATTACHMENTS_PATH)))
 
         val splitResult = attachmentService.splitMsgHeadAndAttachments(messageWithAttachments)
 
-        splitResult shouldNotBe null
-        splitResult.attachments.size shouldBe 3
-        splitResult.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
-        splitResult.messageWithoutAttachmentXml shouldNotContain "Base64Container"
+        splitResult.isSuccess shouldBe true
+
+        val splitMessage = splitResult.getOrNull()
+        splitMessage shouldNotBe null
+        splitMessage!!.attachments.size shouldBe 3
+        splitMessage.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
+        splitMessage.messageWithoutAttachmentXml shouldNotContain "Base64Container"
     }
 
-    "should process XML message when it does not contain attachments" {
+    "splitMsgHeadAndAttachments should process XML message when it does not contain attachments" {
         val messageWithAttachments = String(Files.readAllBytes(Paths.get(MESSAGE_WITHOUT_ATTACHMENTS_PATH)))
 
         val splitResult = attachmentService.splitMsgHeadAndAttachments(messageWithAttachments)
 
-        splitResult shouldNotBe null
-        splitResult.attachments.size shouldBe 0
-        splitResult.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
+        splitResult.isSuccess shouldBe true
+
+        val splitMessage = splitResult.getOrNull()
+        splitMessage shouldNotBe null
+        splitMessage!!.attachments.size shouldBe 0
+        splitMessage.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
+    }
+
+    "saveAttachments should return true if attachment are saved successfully" {
+        val messageId = Uuid.random()
+        val attachments = listOf(
+            Attachment(
+                description = "Test attachment",
+                contentType = "text/plain",
+                contentBase64 = "VGhpcyBpcyBhIHRlc3QgYXR0YWNobWVudC4="
+            )
+        )
+
+        attachmentClient.givenSaveAttachmentsResult(Result.success(Unit))
+
+        val saveAttachmentResult = attachmentService.saveAttachments(messageId, attachments)
+
+        saveAttachmentResult.isSuccess shouldBe true
+    }
+
+    "saveAttachments should return true if there are no attachments to save" {
+        val messageId = Uuid.random()
+        val attachments = emptyList<Attachment>()
+
+        val saveAttachmentResult = attachmentService.saveAttachments(messageId, attachments)
+
+        saveAttachmentResult.isSuccess shouldBe true
+    }
+
+    "saveAttachments should return false if saving attachments fails" {
+        val messageId = Uuid.random()
+        val attachments = listOf(
+            Attachment(
+                description = "Test attachment",
+                contentType = "text/plain",
+                contentBase64 = "VGhpcyBpcyBhIHRlc3QgYXR0YWNobWVudC4="
+            )
+        )
+
+        attachmentClient.givenSaveAttachmentsResult(Result.failure(Exception("Failed to save attachments")))
+
+        val saveAttachmentResult = attachmentService.saveAttachments(messageId, attachments)
+
+        saveAttachmentResult.isSuccess shouldBe false
     }
 })
