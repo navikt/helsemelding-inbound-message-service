@@ -43,8 +43,6 @@ class DomAttachmentService(
 
     override suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Boolean {
         try {
-            if (attachments.isEmpty()) return true
-
             val attachmentDtoList = attachments.map {
                 AttachmentDto(
                     description = it.description,
