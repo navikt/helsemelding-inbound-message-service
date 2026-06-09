@@ -97,7 +97,12 @@ class PollerServiceSpec : StringSpec(
                 )
             )
 
-            attachmentService.givenSplitMessage(buildSplitMessage(xml))
+            attachmentService.givenSplitMessageResult(
+                Result.success(buildSplitMessage(xml))
+            )
+            attachmentService.givenSaveAttachmentResult(
+                Result.success(Unit)
+            )
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
@@ -153,7 +158,9 @@ class PollerServiceSpec : StringSpec(
                 )
             )
 
-            attachmentService.givenSplitMessage(null)
+            attachmentService.givenSplitMessageResult(
+                Result.failure(RuntimeException("Parsing failed"))
+            )
 
             val message = Message(
                 id = messageId,
@@ -180,8 +187,12 @@ class PollerServiceSpec : StringSpec(
                 )
             )
 
-            attachmentService.givenSplitMessage(buildSplitMessage(xml))
-            attachmentService.givenIsAttachmentsSaved(false)
+            attachmentService.givenSplitMessageResult(
+                Result.success(buildSplitMessage(xml))
+            )
+            attachmentService.givenSplitMessageResult(
+                Result.failure(RuntimeException("Saving attachments failed"))
+            )
 
             val message = Message(
                 id = messageId,
@@ -208,7 +219,12 @@ class PollerServiceSpec : StringSpec(
                 )
             )
 
-            attachmentService.givenSplitMessage(buildSplitMessage(xml))
+            attachmentService.givenSplitMessageResult(
+                Result.success(buildSplitMessage(xml))
+            )
+            attachmentService.givenSaveAttachmentResult(
+                Result.success(Unit)
+            )
 
             publisher.givenPublishingResult(Result.failure(RuntimeException("Kafka unavailable")))
 
@@ -244,7 +260,12 @@ class PollerServiceSpec : StringSpec(
             )
             ediAdapterClient.givenMarkAsRead(Left(errorMessage500))
 
-            attachmentService.givenSplitMessage(buildSplitMessage(xml))
+            attachmentService.givenSplitMessageResult(
+                Result.success(buildSplitMessage(xml))
+            )
+            attachmentService.givenSaveAttachmentResult(
+                Result.success(Unit)
+            )
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
@@ -283,7 +304,12 @@ class PollerServiceSpec : StringSpec(
                 )
             )
 
-            attachmentService.givenSplitMessage(buildSplitMessage(xml))
+            attachmentService.givenSplitMessageResult(
+                Result.success(buildSplitMessage(xml))
+            )
+            attachmentService.givenSaveAttachmentResult(
+                Result.success(Unit)
+            )
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 

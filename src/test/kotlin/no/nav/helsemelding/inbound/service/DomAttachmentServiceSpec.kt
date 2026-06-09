@@ -26,10 +26,13 @@ class DomAttachmentServiceSpec : StringSpec({
 
         val splitResult = attachmentService.splitMsgHeadAndAttachments(messageWithAttachments)
 
-        splitResult shouldNotBe null
-        splitResult!!.attachments.size shouldBe 3
-        splitResult.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
-        splitResult.messageWithoutAttachmentXml shouldNotContain "Base64Container"
+        splitResult.isSuccess shouldBe true
+
+        val spritMessage = splitResult.getOrNull()
+        spritMessage shouldNotBe null
+        spritMessage!!.attachments.size shouldBe 3
+        spritMessage.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
+        spritMessage.messageWithoutAttachmentXml shouldNotContain "Base64Container"
     }
 
     "splitMsgHeadAndAttachments should process XML message when it does not contain attachments" {
@@ -37,9 +40,12 @@ class DomAttachmentServiceSpec : StringSpec({
 
         val splitResult = attachmentService.splitMsgHeadAndAttachments(messageWithAttachments)
 
-        splitResult shouldNotBe null
-        splitResult!!.attachments.size shouldBe 0
-        splitResult.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
+        splitResult.isSuccess shouldBe true
+
+        val spritMessage = splitResult.getOrNull()
+        spritMessage shouldNotBe null
+        spritMessage!!.attachments.size shouldBe 0
+        spritMessage.messageWithoutAttachmentXml shouldContain "<MsgInfo>"
     }
 
     "saveAttachments should return true if attachment are saved successfully" {
@@ -54,18 +60,18 @@ class DomAttachmentServiceSpec : StringSpec({
 
         attachmentClient.givenSaveAttachmentsResult(Result.success(Unit))
 
-        val isAttachmentsSaved = attachmentService.saveAttachments(messageId, attachments)
+        val saveAttachmentResult = attachmentService.saveAttachments(messageId, attachments)
 
-        isAttachmentsSaved shouldBe true
+        saveAttachmentResult.isSuccess shouldBe true
     }
 
     "saveAttachments should return true if there are no attachments to save" {
         val messageId = Uuid.random()
         val attachments = emptyList<Attachment>()
 
-        val isAttachmentsSaved = attachmentService.saveAttachments(messageId, attachments)
+        val saveAttachmentResult = attachmentService.saveAttachments(messageId, attachments)
 
-        isAttachmentsSaved shouldBe true
+        saveAttachmentResult.isSuccess shouldBe true
     }
 
     "saveAttachments should return false if saving attachments fails" {
@@ -80,8 +86,8 @@ class DomAttachmentServiceSpec : StringSpec({
 
         attachmentClient.givenSaveAttachmentsResult(Result.failure(Exception("Failed to save attachments")))
 
-        val isAttachmentsSaved = attachmentService.saveAttachments(messageId, attachments)
+        val saveAttachmentResult = attachmentService.saveAttachments(messageId, attachments)
 
-        isAttachmentsSaved shouldBe false
+        saveAttachmentResult.isSuccess shouldBe false
     }
 })

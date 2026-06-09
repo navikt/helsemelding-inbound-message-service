@@ -6,22 +6,25 @@ import no.nav.helsemelding.inbound.service.AttachmentService
 import kotlin.uuid.Uuid
 
 class FakeAttachmentService() : AttachmentService {
-    private var splitMessage: SplitMessage? = null
-    private var isAttachmentsSaved: Boolean = true
+    private var splitMessageResult: Result<SplitMessage> =
+        Result.failure(IllegalStateException("Split message result is not set"))
 
-    fun givenSplitMessage(splitMessage: SplitMessage?) {
-        this.splitMessage = splitMessage
+    private var saveAttachmentsResult: Result<Unit> =
+        Result.failure(IllegalStateException("Save attachments result is not set"))
+
+    fun givenSplitMessageResult(actionResult: Result<SplitMessage>) {
+        this.splitMessageResult = actionResult
     }
 
-    fun givenIsAttachmentsSaved(isSaved: Boolean) {
-        this.isAttachmentsSaved = isSaved
+    fun givenSaveAttachmentResult(actionResult: Result<Unit>) {
+        this.saveAttachmentsResult = actionResult
     }
 
-    override fun splitMsgHeadAndAttachments(msgHeadXml: String): SplitMessage? {
-        return splitMessage
+    override fun splitMsgHeadAndAttachments(msgHeadXml: String): Result<SplitMessage> {
+        return splitMessageResult
     }
 
-    override suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Boolean {
-        return isAttachmentsSaved
+    override suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Result<Unit> {
+        return saveAttachmentsResult
     }
 }

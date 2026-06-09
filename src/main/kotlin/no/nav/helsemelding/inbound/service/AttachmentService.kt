@@ -14,16 +14,16 @@ import no.nav.helsemelding.attachmentmodel.model.Attachment as AttachmentDto
 private val log = KotlinLogging.logger {}
 
 interface AttachmentService {
-    fun splitMsgHeadAndAttachments(msgHeadXml: String): SplitMessage?
-    suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Boolean
+    fun splitMsgHeadAndAttachments(msgHeadXml: String): Result<SplitMessage>
+    suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Result<Unit>
 }
 
 class DomAttachmentService(
     val msgHeadSerializer: MsgHeadSerializer,
     val attachmentClient: AttachmentClient
 ) : AttachmentService {
-    override fun splitMsgHeadAndAttachments(msgHeadXml: String): SplitMessage? {
-        try {
+    override fun splitMsgHeadAndAttachments(msgHeadXml: String): Result<SplitMessage> {
+        return try {
             val msgHead = msgHeadSerializer.deserialize(msgHeadXml)
 
             val attachments = msgHead.extractAttachments()
@@ -31,18 +31,20 @@ class DomAttachmentService(
 
             msgHead.removeAttachments()
 
-            return SplitMessage(
-                messageWithoutAttachmentXml = msgHeadSerializer.serialize(msgHead),
-                attachments = attachments
+            Result.success(
+                SplitMessage(
+                    messageWithoutAttachmentXml = msgHeadSerializer.serialize(msgHead),
+                    attachments = attachments
+                )
             )
         } catch (e: Exception) {
             log.error(e) { "Failed to split message. Error: ${e.message}" }
-            return null
+            Result.failure(e)
         }
     }
 
-    override suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Boolean {
-        try {
+    override suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Result<Unit> {
+        return try {
             val attachmentDtoList = attachments.map {
                 AttachmentDto(
                     description = it.description,
@@ -51,18 +53,15 @@ class DomAttachmentService(
                 )
             }
 
-            val response = attachmentClient.saveAttachments(messageId, attachmentDtoList)
-
-            if (response.isFailure) {
-                val exception = response.exceptionOrNull()
-                log.error(exception) { "Failed to save attachments for messageId: $messageId. Error: ${exception?.message}" }
-                return false
-            }
-
-            return true
+            attachmentClient.saveAttachments(messageId, attachmentDtoList)
+                .onFailure { exception ->
+                    log.error(exception) {
+                        "Failed to save attachments for messageId: $messageId. Error: ${exception.message}"
+                    }
+                }
         } catch (e: Exception) {
             log.error(e) { "Failed to save attachments for messageId: $messageId. Error: ${e.message}" }
-            return false
+            Result.failure(e)
         }
     }
 }

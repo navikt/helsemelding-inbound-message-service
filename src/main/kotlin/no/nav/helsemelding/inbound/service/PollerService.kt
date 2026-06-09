@@ -105,11 +105,14 @@ class PollerService(
         val businessDocumentBase64 = getBusinessDocument(messageId) ?: return false
 
         val businessDocument = String(Base64.getDecoder().decode(businessDocumentBase64))
-        val splitMessage = attachmentService.splitMsgHeadAndAttachments(businessDocument) ?: return false
+        val splitMessage = attachmentService
+            .splitMsgHeadAndAttachments(businessDocument)
+            .getOrElse { return false }
 
         if (!splitMessage.attachments.isEmpty()) {
-            val isAttachmentsSaved = attachmentService.saveAttachments(messageId, splitMessage.attachments)
-            if (!isAttachmentsSaved) return false
+            attachmentService
+                .saveAttachments(messageId, splitMessage.attachments)
+                .onFailure { return false }
         }
 
         val isPublishingSuccessful = publishMessageToKafka(messageId, splitMessage.messageWithoutAttachmentXml)
