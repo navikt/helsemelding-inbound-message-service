@@ -181,7 +181,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             attachmentService.givenSplitMessage(buildSplitMessage(xml))
-            attachmentService.givenSaveAttachmentsResult(false)
+            attachmentService.givenIsAttachmentsSaved(false)
 
             val message = Message(
                 id = messageId,

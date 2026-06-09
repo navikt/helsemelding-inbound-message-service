@@ -54,18 +54,18 @@ class DomAttachmentServiceSpec : StringSpec({
 
         attachmentClient.givenSaveAttachmentsResult(Result.success(Unit))
 
-        val saveResult = attachmentService.saveAttachments(messageId, attachments)
+        val isAttachmentsSaved = attachmentService.saveAttachments(messageId, attachments)
 
-        saveResult shouldBe true
+        isAttachmentsSaved shouldBe true
     }
 
     "saveAttachments should return true if there are no attachments to save" {
         val messageId = Uuid.random()
         val attachments = emptyList<Attachment>()
 
-        val saveResult = attachmentService.saveAttachments(messageId, attachments)
+        val isAttachmentsSaved = attachmentService.saveAttachments(messageId, attachments)
 
-        saveResult shouldBe true
+        isAttachmentsSaved shouldBe true
     }
 
     "saveAttachments should return false if saving attachments fails" {
@@ -80,8 +80,8 @@ class DomAttachmentServiceSpec : StringSpec({
 
         attachmentClient.givenSaveAttachmentsResult(Result.failure(Exception("Failed to save attachments")))
 
-        val saveResult = attachmentService.saveAttachments(messageId, attachments)
+        val isAttachmentsSaved = attachmentService.saveAttachments(messageId, attachments)
 
-        saveResult shouldBe false
+        isAttachmentsSaved shouldBe false
     }
 })
