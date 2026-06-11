@@ -1,29 +1,67 @@
 package no.nav.helsemelding.inbound.service
 
+import io.github.oshai.kotlinlogging.KotlinLogging
+import no.nav.helsemelding.attachmentclient.AttachmentClient
+import no.nav.helsemelding.inbound.model.Attachment
 import no.nav.helsemelding.inbound.model.SplitMessage
 import no.nav.helsemelding.inbound.xml.MsgHeadSerializer
 import no.nav.helsemelding.inbound.xml.extractAttachments
 import no.nav.helsemelding.inbound.xml.removeAttachments
 import no.nav.helsemelding.inbound.xml.toAttachment
+import kotlin.uuid.Uuid
+import no.nav.helsemelding.attachmentmodel.model.Attachment as AttachmentDto
+
+private val log = KotlinLogging.logger {}
 
 interface AttachmentService {
-    fun splitMsgHeadAndAttachments(msgHeadXml: String): SplitMessage
+    fun splitMsgHeadAndAttachments(msgHeadXml: String): Result<SplitMessage>
+    suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Result<Unit>
 }
 
 class DomAttachmentService(
-    val msgHeadSerializer: MsgHeadSerializer
+    val msgHeadSerializer: MsgHeadSerializer,
+    val attachmentClient: AttachmentClient
 ) : AttachmentService {
-    override fun splitMsgHeadAndAttachments(msgHeadXml: String): SplitMessage {
-        val msgHead = msgHeadSerializer.deserialize(msgHeadXml)
+    override fun splitMsgHeadAndAttachments(msgHeadXml: String): Result<SplitMessage> {
+        return try {
+            val msgHead = msgHeadSerializer.deserialize(msgHeadXml)
 
-        val attachments = msgHead.extractAttachments()
-            .map { it.toAttachment() }
+            val attachments = msgHead.extractAttachments()
+                .map { it.toAttachment() }
 
-        msgHead.removeAttachments()
+            msgHead.removeAttachments()
 
-        return SplitMessage(
-            messageWithoutAttachmentXml = msgHeadSerializer.serialize(msgHead),
-            attachments = attachments
-        )
+            Result.success(
+                SplitMessage(
+                    messageWithoutAttachmentXml = msgHeadSerializer.serialize(msgHead),
+                    attachments = attachments
+                )
+            )
+        } catch (e: Exception) {
+            log.error(e) { "Failed to split message. Error: ${e.message}" }
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Result<Unit> {
+        return try {
+            val attachmentDtoList = attachments.map {
+                AttachmentDto(
+                    description = it.description,
+                    contentType = it.contentType,
+                    contentBase64 = it.contentBase64
+                )
+            }
+
+            attachmentClient.saveAttachments(messageId, attachmentDtoList)
+                .onFailure { exception ->
+                    log.error(exception) {
+                        "Failed to save attachments for messageId: $messageId. Error: ${exception.message}"
+                    }
+                }
+        } catch (e: Exception) {
+            log.error(e) { "Failed to save attachments for messageId: $messageId. Error: ${e.message}" }
+            Result.failure(e)
+        }
     }
 }

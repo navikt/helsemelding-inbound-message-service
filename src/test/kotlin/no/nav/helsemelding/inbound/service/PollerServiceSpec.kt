@@ -11,6 +11,7 @@ import no.nav.helsemelding.ediadapter.model.Metadata
 import no.nav.helsemelding.inbound.FakeAttachmentService
 import no.nav.helsemelding.inbound.FakeMessagePublisher
 import no.nav.helsemelding.inbound.metrics.FakeMetrics
+import no.nav.helsemelding.inbound.model.Attachment
 import no.nav.helsemelding.inbound.model.SplitMessage
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
@@ -39,12 +40,12 @@ class PollerServiceSpec : StringSpec(
         }
 
         "Apprec should be processed" {
-            val uuid = Uuid.random()
+            val messageId = Uuid.random()
 
             ediAdapterClient.givenMarkAsRead(Right(true))
 
             val message = Message(
-                id = uuid,
+                id = messageId,
                 isAppRec = true,
                 receiverHerId = FAGSYSTEM_HER_ID
             )
@@ -53,7 +54,7 @@ class PollerServiceSpec : StringSpec(
         }
 
         "Apprec should not be processed if EDI Adapter returns error" {
-            val uuid = Uuid.random()
+            val messageId = Uuid.random()
 
             val errorMessage500 = ErrorMessage(
                 error = "Internal Server Error",
@@ -63,7 +64,7 @@ class PollerServiceSpec : StringSpec(
             ediAdapterClient.givenMarkAsRead(Left(errorMessage500))
 
             val message = Message(
-                id = uuid,
+                id = messageId,
                 isAppRec = true,
                 receiverHerId = FAGSYSTEM_HER_ID
             )
@@ -72,7 +73,7 @@ class PollerServiceSpec : StringSpec(
         }
 
         "Incoming message should be processed" {
-            val uuid = Uuid.random()
+            val messageId = Uuid.random()
 
             val xml = readFileToString("message/incomingDialogMessage.xml")
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
@@ -96,16 +97,17 @@ class PollerServiceSpec : StringSpec(
                 )
             )
 
+            attachmentService.givenSplitMessageResult(
+                Result.success(buildSplitMessage(xml))
+            )
+            attachmentService.givenSaveAttachmentResult(
+                Result.success(Unit)
+            )
+
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
-            val splitMessage = SplitMessage(
-                messageWithoutAttachmentXml = xml,
-                attachments = emptyList()
-            )
-            attachmentService.givenSplitMessage(splitMessage)
-
             val message = Message(
-                id = uuid,
+                id = messageId,
                 isAppRec = false,
                 receiverHerId = FAGSYSTEM_HER_ID
             )
@@ -114,12 +116,12 @@ class PollerServiceSpec : StringSpec(
 
             result shouldBe true
 
-            publisher.publishedKey shouldBe uuid.toString()
+            publisher.publishedKey shouldBe messageId.toString()
             String(publisher.publishedPayload!!) shouldBe xml
         }
 
         "Incoming message should not be processed if retrieving business document fails" {
-            val uuid = Uuid.random()
+            val messageId = Uuid.random()
 
             ediAdapterClient.givenGetBusinessDocumentResponse(
                 Left(
@@ -131,10 +133,8 @@ class PollerServiceSpec : StringSpec(
                 )
             )
 
-            publisher.givenPublishingResult(buildSuccessfulPublishingResult())
-
             val message = Message(
-                id = uuid,
+                id = messageId,
                 isAppRec = false,
                 receiverHerId = FAGSYSTEM_HER_ID
             )
@@ -142,8 +142,8 @@ class PollerServiceSpec : StringSpec(
             pollerService.processMessage(message) shouldBe false
         }
 
-        "Incoming message should not be processed if publishing to Kafka fails" {
-            val uuid = Uuid.random()
+        "Incoming message should not be processed if parsing business document fails" {
+            val messageId = Uuid.random()
 
             val xml = readFileToString("message/incomingDialogMessage.xml")
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
@@ -158,16 +158,78 @@ class PollerServiceSpec : StringSpec(
                 )
             )
 
-            publisher.givenPublishingResult(Result.failure(RuntimeException("Kafka unavailable")))
-
-            val splitMessage = SplitMessage(
-                messageWithoutAttachmentXml = xml,
-                attachments = emptyList()
+            attachmentService.givenSplitMessageResult(
+                Result.failure(RuntimeException("Parsing failed"))
             )
-            attachmentService.givenSplitMessage(splitMessage)
 
             val message = Message(
-                id = uuid,
+                id = messageId,
+                isAppRec = false,
+                receiverHerId = FAGSYSTEM_HER_ID
+            )
+
+            pollerService.processMessage(message) shouldBe false
+        }
+
+        "Incoming message should not be processed if saving attachments fails" {
+            val messageId = Uuid.random()
+
+            val xml = readFileToString("message/incomingDialogMessage.xml")
+            val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
+
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                Right(
+                    GetBusinessDocumentResponse(
+                        businessDocument = encoded,
+                        contentType = "application/xml",
+                        contentTransferEncoding = "base64"
+                    )
+                )
+            )
+
+            attachmentService.givenSplitMessageResult(
+                Result.success(buildSplitMessage(xml))
+            )
+            attachmentService.givenSplitMessageResult(
+                Result.failure(RuntimeException("Saving attachments failed"))
+            )
+
+            val message = Message(
+                id = messageId,
+                isAppRec = false,
+                receiverHerId = FAGSYSTEM_HER_ID
+            )
+
+            pollerService.processMessage(message) shouldBe false
+        }
+
+        "Incoming message should not be processed if publishing to Kafka fails" {
+            val messageId = Uuid.random()
+
+            val xml = readFileToString("message/incomingDialogMessage.xml")
+            val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
+
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                Right(
+                    GetBusinessDocumentResponse(
+                        businessDocument = encoded,
+                        contentType = "application/xml",
+                        contentTransferEncoding = "base64"
+                    )
+                )
+            )
+
+            attachmentService.givenSplitMessageResult(
+                Result.success(buildSplitMessage(xml))
+            )
+            attachmentService.givenSaveAttachmentResult(
+                Result.success(Unit)
+            )
+
+            publisher.givenPublishingResult(Result.failure(RuntimeException("Kafka unavailable")))
+
+            val message = Message(
+                id = messageId,
                 isAppRec = false,
                 receiverHerId = FAGSYSTEM_HER_ID
             )
@@ -176,7 +238,7 @@ class PollerServiceSpec : StringSpec(
         }
 
         "Incoming message should not be processed if marking as read fails" {
-            val uuid = Uuid.random()
+            val messageId = Uuid.random()
 
             val xml = readFileToString("message/incomingDialogMessage.xml")
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
@@ -198,16 +260,17 @@ class PollerServiceSpec : StringSpec(
             )
             ediAdapterClient.givenMarkAsRead(Left(errorMessage500))
 
+            attachmentService.givenSplitMessageResult(
+                Result.success(buildSplitMessage(xml))
+            )
+            attachmentService.givenSaveAttachmentResult(
+                Result.success(Unit)
+            )
+
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
-            val splitMessage = SplitMessage(
-                messageWithoutAttachmentXml = xml,
-                attachments = emptyList()
-            )
-            attachmentService.givenSplitMessage(splitMessage)
-
             val message = Message(
-                id = uuid,
+                id = messageId,
                 isAppRec = false,
                 receiverHerId = FAGSYSTEM_HER_ID
             )
@@ -216,7 +279,7 @@ class PollerServiceSpec : StringSpec(
         }
 
         "Incoming message should not be processed if sending apprec fails" {
-            val uuid = Uuid.random()
+            val messageId = Uuid.random()
 
             val xml = readFileToString("message/incomingDialogMessage.xml")
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
@@ -241,16 +304,17 @@ class PollerServiceSpec : StringSpec(
                 )
             )
 
+            attachmentService.givenSplitMessageResult(
+                Result.success(buildSplitMessage(xml))
+            )
+            attachmentService.givenSaveAttachmentResult(
+                Result.success(Unit)
+            )
+
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
-            val splitMessage = SplitMessage(
-                messageWithoutAttachmentXml = xml,
-                attachments = emptyList()
-            )
-            attachmentService.givenSplitMessage(splitMessage)
-
             val message = Message(
-                id = uuid,
+                id = messageId,
                 isAppRec = false,
                 receiverHerId = FAGSYSTEM_HER_ID
             )
@@ -274,6 +338,17 @@ fun buildSuccessfulPublishingResult(): Result<RecordMetadata> {
     )
     return Result.success(record)
 }
+
+fun buildSplitMessage(xml: String) = SplitMessage(
+    messageWithoutAttachmentXml = xml,
+    attachments = listOf(
+        Attachment(
+            description = "Test attachment",
+            contentType = "application/pdf",
+            contentBase64 = "VGhpcyBpcyBhIHRlc3QgYXR0YWNobWVudA=="
+        )
+    )
+)
 
 fun readFileToString(path: String): String {
     return PollerServiceSpec::class.java.classLoader.getResource(path)!!.readText()

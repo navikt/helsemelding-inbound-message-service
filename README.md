@@ -2,19 +2,23 @@
 
 Application responsible for processing incoming messages to NAV
 
-Overview:
-- Poll for new messages and process them one by one:
-  - If the message is an apprec - mark message as read.
-  - If the message is an incoming message - get business document for this message.
-    - If the business document is retrieved - decode it from Base64 string and send to Kafka.
-      - if the message is successfully sent to Kafka - mark the message as read.
+## Overview
 
-## Local development
+The service polls EDI Adapter for incoming messages for a configured HER-id.
 
-Running the application locally:
-1. Replace the usage of `ediAdapterClient` with a fake one.
-   See [Replacing ediAdapterClient with a fake](#Replacing-ediAdapterClient-with-a-fake) for more details.
-2. Run the application (typically by running the `App` class in your IDE).
+Each message is processed depending on its type:
+
+1. If the message is an `AppRec`, the service marks it as read using EDI Adapter.
+2. If the message is a normal incoming message, the service:
+   - fetches the business document using EDI Adapter.
+   - decodes the Base64 encoded XML payload,
+   - deserializes the `MsgHead` XML,
+   - extracts attachments from the message,
+   - removes the attachments from the `MsgHead` XML,
+   - saves the extracted attachments using Attachment Service,
+   - publishes the `MsgHead` XML without attachments to Kafka,
+   - marks the original message as read using EDI Adapter,
+   - sends an `AppRec` to NHN using EDI Adapter.
 
 ### Configuration
 
@@ -27,18 +31,27 @@ Relevant configuration for adjusting the frequency of scheduler and how many mes
 | batchSize         | Number of messages to process per batch                     | Int  |
 | scheduleInterval  | How often scheduler should poll for new messages in minutes | Int  |
 
-### Replacing ediAdapterClient with a fake
+### Local development
 
-To run this locally (meaning without actually sending any HTTP requests) change the following in App.kt:
+To run this service locally (without integration with Kafka and other services) change the following in App.kt:
 ```kotlin
-val dialogMessagePublisher = DialogMessagePublisher(deps.kafkaPublisher)
-val poller = PollerService(deps.ediAdapterClient, dialogMessagePublisher)
+val poller = PollerService(
+    deps.ediAdapterClient,
+    dialogMessagePublisher,
+    attachmentService,
+    metrics
+)
 ```
 
-to use `LocalEdiAdapterClient` and `LocalMessagePublisher` instead:
+with local implementations of the dependencies:
 ```kotlin
 val poller = PollerService(
     LocalEdiAdapterClient(),
-    LocalMessagePublisher()
+    LocalMessagePublisher(),
+    DomAttachmentService(
+        JaxbMsgHeadSerializer(),
+        LocalAttachmentClient()
+    ),
+    FakeMetrics()
 )
 ```

@@ -36,7 +36,7 @@ fun main() = SuspendApp {
 
             val dialogMessagePublisher = DialogMessagePublisher(deps.kafkaPublisher)
             val msgHeadSerializer = JaxbMsgHeadSerializer()
-            val attachmentService = DomAttachmentService(msgHeadSerializer)
+            val attachmentService = DomAttachmentService(msgHeadSerializer, deps.attachmentClient)
 
             val poller = PollerService(
                 deps.ediAdapterClient,

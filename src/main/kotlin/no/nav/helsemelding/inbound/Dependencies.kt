@@ -7,6 +7,8 @@ import io.github.nomisRev.kafka.publisher.KafkaPublisher
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micrometer.prometheus.PrometheusConfig.DEFAULT
 import io.micrometer.prometheus.PrometheusMeterRegistry
+import no.nav.helsemelding.attachmentclient.AttachmentClient
+import no.nav.helsemelding.attachmentclient.HttpAttachmentClient
 import no.nav.helsemelding.ediadapter.client.EdiAdapterClient
 import no.nav.helsemelding.ediadapter.client.HttpEdiAdapterClient
 import no.nav.helsemelding.ediadapter.client.scopedAuthHttpClient
@@ -18,7 +20,8 @@ private val log = KotlinLogging.logger {}
 data class Dependencies(
     val meterRegistry: PrometheusMeterRegistry,
     val ediAdapterClient: EdiAdapterClient,
-    val kafkaPublisher: KafkaPublisher<String, ByteArray>
+    val kafkaPublisher: KafkaPublisher<String, ByteArray>,
+    val attachmentClient: AttachmentClient
 )
 
 internal suspend fun ResourceScope.metricsRegistry(): PrometheusMeterRegistry =
@@ -37,15 +40,22 @@ suspend fun ResourceScope.dependencies(): Dependencies = awaitAll {
     val metricsRegistry = async { metricsRegistry() }
     val ediAdapterClient = async { ediAdapterClient(config.ediAdapter) }
     val kafkaPublisher = async { kafkaPublisher(config.kafka) }
+    val attachmentClient = async { attachmentClient() }
 
     Dependencies(
         metricsRegistry.await(),
         ediAdapterClient.await(),
-        kafkaPublisher.await()
+        kafkaPublisher.await(),
+        attachmentClient.await()
     )
 }
 
 internal suspend fun ResourceScope.kafkaPublisher(kafka: Kafka): KafkaPublisher<String, ByteArray> =
     install({ KafkaPublisher(kafka.toPublisherSettings()) }) { p, _ ->
         p.close().also { log.info { "Closed Kafka publisher" } }
+    }
+
+internal suspend fun ResourceScope.attachmentClient(): AttachmentClient =
+    install({ HttpAttachmentClient() }) { p, _: ExitCase ->
+        p.close().also { log.info { "Closed attachment client" } }
     }
