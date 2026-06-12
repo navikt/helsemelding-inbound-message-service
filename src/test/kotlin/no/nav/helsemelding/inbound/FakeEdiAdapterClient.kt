@@ -3,14 +3,18 @@ package no.nav.helsemelding.inbound.service
 import arrow.core.Either
 import arrow.core.Either.Left
 import no.nav.helsemelding.ediadapter.client.EdiAdapterClient
+import no.nav.helsemelding.ediadapter.client.ExperimentalEdiAdapterApi
 import no.nav.helsemelding.ediadapter.model.ApprecInfo
 import no.nav.helsemelding.ediadapter.model.ErrorMessage
 import no.nav.helsemelding.ediadapter.model.GetBusinessDocumentResponse
 import no.nav.helsemelding.ediadapter.model.GetMessagesRequest
+import no.nav.helsemelding.ediadapter.model.GetNoticesRequest
 import no.nav.helsemelding.ediadapter.model.Message
 import no.nav.helsemelding.ediadapter.model.Metadata
+import no.nav.helsemelding.ediadapter.model.Notice
 import no.nav.helsemelding.ediadapter.model.PostAppRecRequest
 import no.nav.helsemelding.ediadapter.model.PostMessageRequest
+import no.nav.helsemelding.ediadapter.model.PostMshConfigurationRequest
 import no.nav.helsemelding.ediadapter.model.StatusInfo
 import kotlin.uuid.Uuid
 
@@ -57,6 +61,14 @@ class FakeEdiAdapterClient : EdiAdapterClient {
         Left(errorMessage404)
 
     override suspend fun postMessage(postMessagesRequest: PostMessageRequest): Either<ErrorMessage, Metadata> =
+        Left(errorMessage404)
+
+    @ExperimentalEdiAdapterApi
+    override suspend fun postMshConfiguration(postMshConfigurationRequest: PostMshConfigurationRequest): Either<ErrorMessage, Unit> =
+        Left(errorMessage404)
+
+    @ExperimentalEdiAdapterApi
+    override suspend fun getNotices(getNoticesRequest: GetNoticesRequest): Either<ErrorMessage, List<Notice>> =
         Left(errorMessage404)
 
     override fun close() {}
