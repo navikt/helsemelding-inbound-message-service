@@ -107,12 +107,18 @@ class PollerService(
         val businessDocument = String(Base64.getDecoder().decode(businessDocumentBase64))
         val splitMessage = attachmentService
             .splitMsgHeadAndAttachments(businessDocument)
-            .getOrElse { return false }
+            .getOrElse {
+                metrics.registerIncomingMessageFailed(ErrorTypeTag.SPLITTING_MESSAGE_FAILED)
+                return false
+            }
 
         if (!splitMessage.attachments.isEmpty()) {
             attachmentService
                 .saveAttachments(messageId, splitMessage.attachments)
-                .onFailure { return false }
+                .onFailure {
+                    metrics.registerIncomingMessageFailed(ErrorTypeTag.SAVING_ATTACHMENTS_FAILED)
+                    return false
+                }
         }
 
         val isPublishingSuccessful = publishMessageToKafka(messageId, splitMessage.messageWithoutAttachmentXml)
