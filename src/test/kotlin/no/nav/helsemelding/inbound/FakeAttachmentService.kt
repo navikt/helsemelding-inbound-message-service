@@ -8,11 +8,10 @@ import kotlin.uuid.Uuid
 
 class FakeAttachmentService : AttachmentService {
     var savedMessageId: Uuid? = null
-        private set
+
     var savedAttachments: List<Attachment>? = null
-        private set
+
     var saveAttachmentsCallCount: Int = 0
-        private set
 
     private var saveAttachmentsEither: Either<Throwable, Unit> =
         IllegalStateException("Save attachments result is not set").left()
