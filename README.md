@@ -29,7 +29,7 @@ Relevant configuration for adjusting the frequency of scheduler and how many mes
 | herId             | The receiver herId to fetch messages for (NAV)              | Int  |
 | fetchLimit        | Number of messages to fetch. Number between 1 and 100       | Int  |
 | batchSize         | Number of messages to process per batch                     | Int  |
-| scheduleInterval  | How often scheduler should poll for new messages in minutes | Int  |
+| scheduleInterval  | How often scheduler should poll for new messages            | Duration |
 
 ### Local development
 
@@ -39,6 +39,7 @@ val poller = PollerService(
     deps.ediAdapterClient,
     dialogMessagePublisher,
     attachmentService,
+    messageConverter,
     metrics
 )
 ```
@@ -48,10 +49,8 @@ with local implementations of the dependencies:
 val poller = PollerService(
     LocalEdiAdapterClient(),
     LocalMessagePublisher(),
-    DomAttachmentService(
-        JaxbMsgHeadSerializer(),
-        LocalAttachmentClient()
-    ),
+    AttachmentStorageService(LocalAttachmentClient()),
+    MsgHeadMessageConverter(),
     FakeMetrics()
 )
 ```
