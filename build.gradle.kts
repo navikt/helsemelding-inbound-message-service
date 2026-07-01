@@ -69,9 +69,7 @@ dependencies {
     implementation(libs.kotlin.kafka)
     implementation(libs.edi.adapter.client)
     implementation(libs.attachment.client)
-    implementation(libs.javax.jaxb.api)
-    implementation(libs.migesok.jaxb.time.adapters)
-    implementation(libs.bundles.nav.xml)
+    implementation(libs.message.converter)
 
     testImplementation(testLibs.bundles.kotest)
     testImplementation(testLibs.kotest.assertions.arrow)

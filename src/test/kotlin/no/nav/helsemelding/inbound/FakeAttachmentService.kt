@@ -1,30 +1,30 @@
 package no.nav.helsemelding.inbound
 
+import arrow.core.Either
+import arrow.core.left
 import no.nav.helsemelding.inbound.model.Attachment
-import no.nav.helsemelding.inbound.model.SplitMessage
 import no.nav.helsemelding.inbound.service.AttachmentService
 import kotlin.uuid.Uuid
 
-class FakeAttachmentService() : AttachmentService {
-    private var splitMessageResult: Result<SplitMessage> =
-        Result.failure(IllegalStateException("Split message result is not set"))
+class FakeAttachmentService : AttachmentService {
+    var savedMessageId: Uuid? = null
 
-    private var saveAttachmentsResult: Result<Unit> =
-        Result.failure(IllegalStateException("Save attachments result is not set"))
+    var savedAttachments: List<Attachment>? = null
 
-    fun givenSplitMessageResult(actionResult: Result<SplitMessage>) {
-        this.splitMessageResult = actionResult
+    var saveAttachmentsCallCount: Int = 0
+
+    private var saveAttachmentsEither: Either<Throwable, Unit> =
+        IllegalStateException("Save attachments result is not set").left()
+
+    fun givenSaveAttachmentsEither(either: Either<Throwable, Unit>) {
+        this.saveAttachmentsEither = either
     }
 
-    fun givenSaveAttachmentResult(actionResult: Result<Unit>) {
-        this.saveAttachmentsResult = actionResult
-    }
+    override suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Either<Throwable, Unit> {
+        saveAttachmentsCallCount += 1
+        savedMessageId = messageId
+        savedAttachments = attachments
 
-    override fun splitMsgHeadAndAttachments(msgHeadXml: String): Result<SplitMessage> {
-        return splitMessageResult
-    }
-
-    override suspend fun saveAttachments(messageId: Uuid, attachments: List<Attachment>): Result<Unit> {
-        return saveAttachmentsResult
+        return saveAttachmentsEither
     }
 }
