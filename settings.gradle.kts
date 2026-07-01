@@ -27,8 +27,7 @@ dependencyResolutionManagement {
             version("kotlin-kafka", "0.4.1")
             version("edi-adapter-client", "0.0.7")
             version("attachment-client", "0.0.2")
-            version("jaxb-api", "2.4.0-b180830.0359")
-            version("migesok-time-adapters", "1.1.3")
+            version("message-converter", "0.0.1-SNAPSHOT")
 
             library("arrow-core", "io.arrow-kt", "arrow-core").versionRef("arrow")
             library("arrow-functions", "io.arrow-kt", "arrow-functions").versionRef("arrow")
@@ -73,19 +72,11 @@ dependencyResolutionManagement {
 
             library("attachment-client", "no.nav.helsemelding", "attachment-client").versionRef("attachment-client")
 
-            library("javax-jaxb-api", "javax.xml.bind", "jaxb-api").versionRef("jaxb-api")
-
-            library("migesok-jaxb-time-adapters", "com.migesok", "jaxb-java-time-adapters").versionRef("migesok-time-adapters")
-
-            library("nav-xml-hodemelding", "no.nav.helse.xml", "kith-hodemelding").version("2019.07.30-12-26-5c924ef4f04022bbb850aaf299eb8e4464c1ca6a")
-            library("nav-xml-dialogmelding", "no.nav.helse.xml", "dialogmelding").version("1.5d21db9")
-            library("nav-xml-base64Container", "no.nav.helse.xml", "base64Container").version("1.5ac2176")
-            library("nav-xml-apprec", "no.nav.helse.xml", "kith-apprec").version("2019.07.30-04-23-2a0d1388209441ec05d2e92a821eed4f796a3ae2")
+            library("message-converter", "no.nav.helsemelding", "message-converter").versionRef("message-converter")
 
             bundle("prometheus", listOf("ktor-server-metrics-micrometer", "micrometer-registry-prometheus"))
             bundle("logging", listOf("logback-classic", "logback-logstash"))
             bundle("opentelemetry", listOf("opentelemetry-logback-mdc", "opentelemetry-extension-kotlin"))
-            bundle("nav-xml", listOf("nav-xml-hodemelding", "nav-xml-dialogmelding", "nav-xml-base64Container", "nav-xml-apprec"))
         }
 
         create("testLibs") {

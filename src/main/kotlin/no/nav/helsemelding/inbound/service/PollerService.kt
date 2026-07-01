@@ -2,6 +2,7 @@ package no.nav.helsemelding.inbound.service
 
 import arrow.core.Either.Left
 import arrow.core.Either.Right
+import arrow.core.getOrElse
 import arrow.fx.coroutines.parMap
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.opentelemetry.api.GlobalOpenTelemetry
@@ -17,11 +18,14 @@ import no.nav.helsemelding.ediadapter.model.PostAppRecRequest
 import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.metrics.ErrorTypeTag
 import no.nav.helsemelding.inbound.metrics.Metrics
+import no.nav.helsemelding.inbound.model.Attachment
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.registerDuration
 import no.nav.helsemelding.inbound.util.withSpan
+import no.nav.helsemelding.message.converter.MsgHeadMessageConverter
 import java.util.Base64
 import kotlin.uuid.Uuid
+import no.nav.helsemelding.message.model.Attachment as ConverterAttachment
 
 private val log = KotlinLogging.logger {}
 private val tracer = GlobalOpenTelemetry.getTracer("PollerService")
@@ -30,6 +34,7 @@ class PollerService(
     private val ediAdapterClient: EdiAdapterClient,
     private val messagePublisher: MessagePublisher,
     private val attachmentService: AttachmentService,
+    private val messageConverter: MsgHeadMessageConverter,
     private val metrics: Metrics
 ) {
     private val pollerConfig = config().poller
@@ -105,8 +110,8 @@ class PollerService(
         val businessDocumentBase64 = getBusinessDocument(messageId) ?: return false
 
         val businessDocument = String(Base64.getDecoder().decode(businessDocumentBase64))
-        val splitMessage = attachmentService
-            .splitMsgHeadAndAttachments(businessDocument)
+        val splitMessage = messageConverter
+            .splitAttachments(businessDocument)
             .getOrElse {
                 metrics.registerIncomingMessageFailed(ErrorTypeTag.SPLITTING_MESSAGE_FAILED)
                 return false
@@ -114,14 +119,14 @@ class PollerService(
 
         if (!splitMessage.attachments.isEmpty()) {
             attachmentService
-                .saveAttachments(messageId, splitMessage.attachments)
-                .onFailure {
+                .saveAttachments(messageId, splitMessage.attachments.toAttachments())
+                .getOrElse {
                     metrics.registerIncomingMessageFailed(ErrorTypeTag.SAVING_ATTACHMENTS_FAILED)
                     return false
                 }
         }
 
-        val isPublishingSuccessful = publishMessageToKafka(messageId, splitMessage.messageWithoutAttachmentXml)
+        val isPublishingSuccessful = publishMessageToKafka(messageId, splitMessage.messageWithoutAttachmentsXml)
         if (!isPublishingSuccessful) return false
 
         val isMarkedAsRead = markMessageAsRead(messageId, receiverHerId)
@@ -142,6 +147,7 @@ class PollerService(
                 log.info { "Apprec sent successfully for message: $messageId" }
                 true
             }
+
             is Left<ErrorMessage> -> {
                 log.error { "Failed to send apprec for message: $messageId. Error: ${response.value}" }
                 metrics.registerIncomingMessageFailed(ErrorTypeTag.SENDING_APPREC_FAILED)
@@ -171,6 +177,7 @@ class PollerService(
                 log.info { "Retrieved business document for message: $messageId" }
                 response.value.businessDocument
             }
+
             is Left<ErrorMessage> -> {
                 log.error { "Failed to retrieve business document for message: $messageId: ${response.value.error} Stack trace: ${response.value.stackTrace}" }
                 metrics.registerIncomingMessageFailed(ErrorTypeTag.RETRIEVING_BUSINESS_DOCUMENT_FAILED)
@@ -193,6 +200,15 @@ class PollerService(
                 false
             }
     }
+
+    fun List<ConverterAttachment>.toAttachments(): List<Attachment> =
+        map {
+            Attachment(
+                description = it.description,
+                contentType = it.contentType,
+                contentBase64 = it.contentBase64
+            )
+        }
 
     private fun List<Message>.withLogging(): List<Message> = also {
         log.info { "Fetched messages size=$size" }
