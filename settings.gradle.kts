@@ -11,11 +11,10 @@ dependencyResolutionManagement {
 
     versionCatalogs {
         create("libs") {
-            version("arrow", "2.0.1")
+            version("arrow", "2.2.3")
             version("jwt", "4.4.0")
             version("nimbus-jwt", "9.31")
-            version("suspendapp", "0.5.0")
-            version("ktor", "3.0.3")
+            version("ktor", "3.5.1")
             version("kotlin-logging", "7.0.3")
             version("token-validation-ktor", "5.0.15")
             version("eclipse-angus", "2.0.2")
@@ -35,8 +34,8 @@ dependencyResolutionManagement {
             library("arrow-functions", "io.arrow-kt", "arrow-functions").versionRef("arrow")
             library("arrow-fx-coroutines", "io.arrow-kt", "arrow-fx-coroutines").versionRef("arrow")
             library("arrow-resilience", "io.arrow-kt", "arrow-resilience").versionRef("arrow")
-            library("arrow-suspendapp", "io.arrow-kt", "suspendapp").versionRef("suspendapp")
-            library("arrow-suspendapp-ktor", "io.arrow-kt", "suspendapp-ktor").versionRef("suspendapp")
+            library("arrow-suspendapp", "io.arrow-kt", "suspendapp").versionRef("arrow")
+            library("arrow-suspendapp-ktor", "io.arrow-kt", "suspendapp-ktor").versionRef("arrow")
 
             library("hoplite-core", "com.sksamuel.hoplite", "hoplite-core").versionRef("hoplite")
             library("hoplite-hocon", "com.sksamuel.hoplite", "hoplite-hocon").versionRef("hoplite")
@@ -91,8 +90,8 @@ dependencyResolutionManagement {
 
         create("testLibs") {
             version("arrow", "2.0.0")
-            version("ktor", "3.0.3")
-            version("ktor-server-test", "3.0.3")
+            version("ktor", "3.5.1")
+            version("ktor-server-test", "3.5.1")
             version("kotest", "5.9.1")
             version("testcontainers", "1.18.1")
             version("kotest-extensions", "2.0.2")
