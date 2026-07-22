@@ -126,7 +126,11 @@ class PollerService(
                 }
         }
 
-        val isPublishingSuccessful = publishMessageToKafka(messageId, splitMessage.messageWithoutAttachmentsXml)
+        val isPublishingSuccessful = publishMessageToKafka(
+            messageId = messageId,
+            payload = splitMessage.messageWithoutAttachmentsXml,
+            attachmentCount = splitMessage.attachments.size
+        )
         if (!isPublishingSuccessful) return false
 
         val isMarkedAsRead = markMessageAsRead(messageId, receiverHerId)
@@ -186,10 +190,14 @@ class PollerService(
         }
     }
 
-    private suspend fun publishMessageToKafka(messageId: Uuid, payload: String): Boolean {
+    private suspend fun publishMessageToKafka(
+        messageId: Uuid,
+        payload: String,
+        attachmentCount: Int
+    ): Boolean {
         val key = messageId.toString()
 
-        return messagePublisher.publish(key, payload.toByteArray())
+        return messagePublisher.publish(key, payload.toByteArray(), attachmentCount)
             .map {
                 log.info { "Successfully published message $key to Kafka." }
                 true

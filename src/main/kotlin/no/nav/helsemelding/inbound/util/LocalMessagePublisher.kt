@@ -5,7 +5,7 @@ import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
 
 class LocalMessagePublisher : MessagePublisher {
-    override suspend fun publish(key: String, payload: ByteArray): Result<RecordMetadata> {
+    override suspend fun publish(key: String, payload: ByteArray, attachmentCount: Int): Result<RecordMetadata> {
         return Result.success(
             RecordMetadata(
                 TopicPartition("test", 0),
