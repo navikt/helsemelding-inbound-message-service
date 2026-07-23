@@ -120,6 +120,7 @@ class PollerServiceSpec : StringSpec(
 
             publisher.publishedKey shouldBe messageId.toString()
             String(publisher.publishedPayload!!) shouldBe messageConverter.expectedPayload(xml)
+            publisher.publishedAttachmentCount shouldBe 0
         }
 
         "Incoming message with attachments should save attachments and publish message without attachments" {
@@ -185,6 +186,8 @@ class PollerServiceSpec : StringSpec(
             publishedPayload.contains("Testvedlegg 2") shouldBe false
             publishedPayload.contains("Testvedlegg 3") shouldBe false
             publishedPayload.contains("Base64Container") shouldBe false
+
+            publisher.publishedAttachmentCount shouldBe 3
         }
 
         "Incoming message should not be processed if retrieving business document fails" {

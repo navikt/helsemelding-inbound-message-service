@@ -9,15 +9,18 @@ private val log = KotlinLogging.logger {}
 class FakeMessagePublisher : MessagePublisher {
     var publishedKey: String? = null
     var publishedPayload: ByteArray? = null
+    var publishedAttachmentCount: Int? = null
+
     private var publishingResult: Result<RecordMetadata>? = null
 
     fun givenPublishingResult(result: Result<RecordMetadata>) {
         publishingResult = result
     }
 
-    override suspend fun publish(key: String, payload: ByteArray): Result<RecordMetadata> {
+    override suspend fun publish(key: String, payload: ByteArray, attachmentCount: Int): Result<RecordMetadata> {
         publishedKey = key
         publishedPayload = payload
+        publishedAttachmentCount = attachmentCount
 
         return publishingResult!!
     }
