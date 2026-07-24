@@ -28,6 +28,7 @@ dependencyResolutionManagement {
             version("edi-adapter-client", "0.0.7")
             version("attachment-client", "0.0.2")
             version("message-converter", "0.0.1-SNAPSHOT")
+            version("hikari", "6.3.0")
 
             library("arrow-core", "io.arrow-kt", "arrow-core").versionRef("arrow")
             library("arrow-functions", "io.arrow-kt", "arrow-functions").versionRef("arrow")
@@ -73,6 +74,8 @@ dependencyResolutionManagement {
             library("attachment-client", "no.nav.helsemelding", "attachment-client").versionRef("attachment-client")
 
             library("message-converter", "no.nav.helsemelding", "message-converter").versionRef("message-converter")
+
+            library("hikari", "com.zaxxer", "HikariCP").versionRef("hikari")
 
             bundle("prometheus", listOf("ktor-server-metrics-micrometer", "micrometer-registry-prometheus"))
             bundle("logging", listOf("logback-classic", "logback-logstash"))

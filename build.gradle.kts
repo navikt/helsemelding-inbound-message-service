@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.kotlin.logging)
     implementation(libs.token.validation.ktor.v3)
     implementation(libs.kotlin.kafka)
+    implementation(libs.hikari)
     implementation(libs.edi.adapter.client)
     implementation(libs.attachment.client)
     implementation(libs.message.converter)
