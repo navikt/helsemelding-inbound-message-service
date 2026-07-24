@@ -29,6 +29,9 @@ dependencyResolutionManagement {
             version("attachment-client", "0.0.2")
             version("message-converter", "0.0.1-SNAPSHOT")
             version("hikari", "6.3.0")
+            version("exposed", "1.0.0-rc-3")
+            version("flyway", "11.8.0")
+            version("postgresql", "42.7.5")
 
             library("arrow-core", "io.arrow-kt", "arrow-core").versionRef("arrow")
             library("arrow-functions", "io.arrow-kt", "arrow-functions").versionRef("arrow")
@@ -76,6 +79,10 @@ dependencyResolutionManagement {
             library("message-converter", "no.nav.helsemelding", "message-converter").versionRef("message-converter")
 
             library("hikari", "com.zaxxer", "HikariCP").versionRef("hikari")
+            library("exposed-jdbc", "org.jetbrains.exposed", "exposed-jdbc").versionRef("exposed")
+            library("exposed-datetime", "org.jetbrains.exposed", "exposed-kotlin-datetime").versionRef("exposed")
+            library("flyway-postgresql", "org.flywaydb", "flyway-database-postgresql").versionRef("flyway")
+            library("postgresql", "org.postgresql", "postgresql").versionRef("postgresql")
 
             bundle("prometheus", listOf("ktor-server-metrics-micrometer", "micrometer-registry-prometheus"))
             bundle("logging", listOf("logback-classic", "logback-logstash"))
