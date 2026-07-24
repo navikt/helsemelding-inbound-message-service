@@ -13,6 +13,7 @@ import no.nav.helsemelding.ediadapter.model.Message
 import no.nav.helsemelding.ediadapter.model.Metadata
 import no.nav.helsemelding.inbound.FakeAttachmentService
 import no.nav.helsemelding.inbound.FakeMessagePublisher
+import no.nav.helsemelding.inbound.FakeMessageRepository
 import no.nav.helsemelding.inbound.metrics.FakeMetrics
 import no.nav.helsemelding.message.converter.MsgHeadMessageConverter
 import org.apache.kafka.clients.producer.RecordMetadata
@@ -40,7 +41,8 @@ class PollerServiceSpec : StringSpec(
                 publisher,
                 attachmentService,
                 messageConverter,
-                FakeMetrics()
+                FakeMetrics(),
+                FakeMessageRepository()
             )
         }
 

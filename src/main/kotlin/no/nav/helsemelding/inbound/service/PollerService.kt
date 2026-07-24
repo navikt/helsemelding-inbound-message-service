@@ -19,11 +19,14 @@ import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.metrics.ErrorTypeTag
 import no.nav.helsemelding.inbound.metrics.Metrics
 import no.nav.helsemelding.inbound.model.Attachment
+import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
+import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.registerDuration
 import no.nav.helsemelding.inbound.util.withSpan
 import no.nav.helsemelding.message.converter.MsgHeadMessageConverter
 import java.util.Base64
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 import no.nav.helsemelding.message.model.Attachment as ConverterAttachment
 
@@ -35,7 +38,8 @@ class PollerService(
     private val messagePublisher: MessagePublisher,
     private val attachmentService: AttachmentService,
     private val messageConverter: MsgHeadMessageConverter,
-    private val metrics: Metrics
+    private val metrics: Metrics,
+    private val messageRepository: MessageRepository
 ) {
     private val pollerConfig = config().poller
 
@@ -89,7 +93,10 @@ class PollerService(
             when (message.isAppRec) {
                 true -> processAppRec(messageId, receiverHerId)
                 else -> registerDuration(metrics::registerIncomingMessageProcessingDuration) {
-                    processIncomingMessage(messageId, receiverHerId)
+                    val receivedAt = Clock.System.now()
+                    val result = processIncomingMessage(messageId, receiverHerId)
+                    messageRepository.save(messageId, receivedAt, result)
+                    result == ProcessingResult.SUCCESS
                 }
             }
         }
@@ -103,18 +110,19 @@ class PollerService(
         return markMessageAsRead(messageId, receiverHerId)
     }
 
-    private suspend fun processIncomingMessage(messageId: Uuid, receiverHerId: Int): Boolean {
+    private suspend fun processIncomingMessage(messageId: Uuid, receiverHerId: Int): ProcessingResult {
         log.info { "Processing incoming message: $messageId" }
         metrics.registerIncomingMessageReceived()
 
-        val businessDocumentBase64 = getBusinessDocument(messageId) ?: return false
+        val businessDocumentBase64 = getBusinessDocument(messageId)
+            ?: return ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
 
         val businessDocument = String(Base64.getDecoder().decode(businessDocumentBase64))
         val splitMessage = messageConverter
             .splitAttachments(businessDocument)
             .getOrElse {
                 metrics.registerIncomingMessageFailed(ErrorTypeTag.SPLITTING_MESSAGE_FAILED)
-                return false
+                return ProcessingResult.SPLITTING_MESSAGE_FAILED
             }
 
         if (!splitMessage.attachments.isEmpty()) {
@@ -122,7 +130,7 @@ class PollerService(
                 .saveAttachments(messageId, splitMessage.attachments.toAttachments())
                 .getOrElse {
                     metrics.registerIncomingMessageFailed(ErrorTypeTag.SAVING_ATTACHMENTS_FAILED)
-                    return false
+                    return ProcessingResult.SAVING_ATTACHMENTS_FAILED
                 }
         }
 
@@ -131,13 +139,17 @@ class PollerService(
             payload = splitMessage.messageWithoutAttachmentsXml,
             attachmentCount = splitMessage.attachments.size
         )
-        if (!isPublishingSuccessful) return false
+        if (!isPublishingSuccessful) return ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
 
         val isMarkedAsRead = markMessageAsRead(messageId, receiverHerId)
-        if (!isMarkedAsRead) return false
+        if (!isMarkedAsRead) return ProcessingResult.MARKING_MESSAGE_AS_READ_FAILED
 
         // TODO: Temporary solution. Application receipt should be sent as a result of receiving feedback from fagsystem.
-        return sendAppRec(messageId, receiverHerId)
+        return if (sendAppRec(messageId, receiverHerId)) {
+            ProcessingResult.SUCCESS
+        } else {
+            ProcessingResult.SENDING_APPREC_FAILED
+        }
     }
 
     private suspend fun sendAppRec(messageId: Uuid, receiverHerId: Int): Boolean {
