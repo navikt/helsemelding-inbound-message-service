@@ -1,0 +1,11 @@
+package no.nav.helsemelding.inbound.persistence.model
+
+enum class ProcessingResult {
+    SUCCESS,
+    RETRIEVING_BUSINESS_DOCUMENT_FAILED,
+    SPLITTING_MESSAGE_FAILED,
+    SAVING_ATTACHMENTS_FAILED,
+    PUBLISHING_TO_KAFKA_FAILED,
+    MARKING_MESSAGE_AS_READ_FAILED,
+    SENDING_APPREC_FAILED
+}
