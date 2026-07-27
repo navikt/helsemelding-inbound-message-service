@@ -15,6 +15,7 @@ import no.nav.helsemelding.inbound.FakeAttachmentService
 import no.nav.helsemelding.inbound.FakeMessagePublisher
 import no.nav.helsemelding.inbound.FakeMessageRepository
 import no.nav.helsemelding.inbound.metrics.FakeMetrics
+import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.message.converter.MsgHeadMessageConverter
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
@@ -30,19 +31,21 @@ class PollerServiceSpec : StringSpec(
         lateinit var pollerService: PollerService
         lateinit var attachmentService: FakeAttachmentService
         lateinit var messageConverter: MsgHeadMessageConverter
+        lateinit var messageRepository: FakeMessageRepository
 
         beforeEach {
             ediAdapterClient = FakeEdiAdapterClient()
             publisher = FakeMessagePublisher()
             attachmentService = FakeAttachmentService()
             messageConverter = MsgHeadMessageConverter()
+            messageRepository = FakeMessageRepository()
             pollerService = PollerService(
                 ediAdapterClient,
                 publisher,
                 attachmentService,
                 messageConverter,
                 FakeMetrics(),
-                FakeMessageRepository()
+                messageRepository
             )
         }
 
@@ -123,6 +126,7 @@ class PollerServiceSpec : StringSpec(
             publisher.publishedKey shouldBe messageId.toString()
             String(publisher.publishedPayload!!) shouldBe messageConverter.expectedPayload(xml)
             publisher.publishedAttachmentCount shouldBe 0
+            messageRepository.findById(messageId)?.result shouldBe ProcessingResult.SUCCESS
         }
 
         "Incoming message with attachments should save attachments and publish message without attachments" {
@@ -212,6 +216,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
+            messageRepository.findById(messageId)?.result shouldBe ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
         }
 
         "Incoming message should not be processed if parsing business document fails" {
@@ -237,6 +242,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
+            messageRepository.findById(messageId)?.result shouldBe ProcessingResult.SPLITTING_MESSAGE_FAILED
         }
 
         "Incoming message should not be processed if saving attachments fails" {
@@ -266,6 +272,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
+            messageRepository.findById(messageId)?.result shouldBe ProcessingResult.SAVING_ATTACHMENTS_FAILED
         }
 
         "Incoming message should not be processed if publishing to Kafka fails" {
@@ -297,6 +304,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
+            messageRepository.findById(messageId)?.result shouldBe ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
         }
 
         "Incoming message should not be processed if marking as read fails" {
@@ -335,6 +343,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
+            messageRepository.findById(messageId)?.result shouldBe ProcessingResult.MARKING_MESSAGE_AS_READ_FAILED
         }
 
         "Incoming message should not be processed if sending apprec fails" {
@@ -378,9 +387,9 @@ class PollerServiceSpec : StringSpec(
             val result = pollerService.processMessage(message)
 
             result shouldBe false
+            messageRepository.findById(messageId)?.result shouldBe ProcessingResult.SENDING_APPREC_FAILED
         }
     }
-
 )
 
 fun buildSuccessfulPublishingResult(): Result<RecordMetadata> {
