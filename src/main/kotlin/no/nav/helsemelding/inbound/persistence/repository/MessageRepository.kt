@@ -13,7 +13,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-object Messages : Table("messages") {
+object ProcessedMessages : Table("processed_messages") {
     val id = uuid("id").transform(UuidTransformer())
     override val primaryKey = PrimaryKey(id)
     val receivedAt = timestamp("received_at")
@@ -28,17 +28,17 @@ interface MessageRepository {
 class ExposedMessageRepository(private val database: Database) : MessageRepository {
     override suspend fun save(id: Uuid, receivedAt: Instant, result: ProcessingResult): Unit =
         suspendTransaction(database) {
-            Messages.insert {
-                it[Messages.id] = id
-                it[Messages.receivedAt] = receivedAt
-                it[Messages.result] = result
+            ProcessedMessages.insert {
+                it[ProcessedMessages.id] = id
+                it[ProcessedMessages.receivedAt] = receivedAt
+                it[ProcessedMessages.result] = result
             }
         }
 
     override suspend fun findById(id: Uuid): IncomingMessage? = suspendTransaction(database) {
-        Messages.selectAll()
-            .where { Messages.id eq id }
+        ProcessedMessages.selectAll()
+            .where { ProcessedMessages.id eq id }
             .singleOrNull()
-            ?.let { IncomingMessage(it[Messages.id], it[Messages.receivedAt], it[Messages.result]) }
+            ?.let { IncomingMessage(it[ProcessedMessages.id], it[ProcessedMessages.receivedAt], it[ProcessedMessages.result]) }
     }
 }
