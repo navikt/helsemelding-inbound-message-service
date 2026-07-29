@@ -1,6 +1,6 @@
 package no.nav.helsemelding.inbound.persistence.repository
 
-import no.nav.helsemelding.inbound.persistence.model.IncomingMessage
+import no.nav.helsemelding.inbound.persistence.model.ProcessedMessage
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.util.UuidTransformer
 import org.jetbrains.exposed.v1.core.Table
@@ -23,7 +23,7 @@ object ProcessedMessages : Table("processed_messages") {
 
 interface MessageRepository {
     suspend fun save(messageId: Uuid, receivedAt: Instant, result: ProcessingResult)
-    suspend fun findByMessageId(messageId: Uuid): IncomingMessage?
+    suspend fun findByMessageId(messageId: Uuid): ProcessedMessage?
 }
 
 class ExposedMessageRepository(private val database: Database) : MessageRepository {
@@ -36,12 +36,12 @@ class ExposedMessageRepository(private val database: Database) : MessageReposito
             }
         }
 
-    override suspend fun findByMessageId(messageId: Uuid): IncomingMessage? = suspendTransaction(database) {
+    override suspend fun findByMessageId(messageId: Uuid): ProcessedMessage? = suspendTransaction(database) {
         ProcessedMessages.selectAll()
             .where { ProcessedMessages.messageId eq messageId }
             .singleOrNull()
             ?.let {
-                IncomingMessage(
+                ProcessedMessage(
                     id = it[ProcessedMessages.id],
                     messageId = it[ProcessedMessages.messageId],
                     receivedAt = it[ProcessedMessages.receivedAt],
