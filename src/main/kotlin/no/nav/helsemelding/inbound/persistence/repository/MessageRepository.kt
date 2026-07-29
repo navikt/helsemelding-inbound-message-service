@@ -14,31 +14,39 @@ import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 object ProcessedMessages : Table("processed_messages") {
-    val id = uuid("id").transform(UuidTransformer())
+    val id = long("id").autoIncrement()
     override val primaryKey = PrimaryKey(id)
+    val messageId = uuid("message_id").transform(UuidTransformer())
     val receivedAt = timestamp("received_at")
     val result = enumerationByName("result", 50, ProcessingResult::class)
 }
 
 interface MessageRepository {
-    suspend fun save(id: Uuid, receivedAt: Instant, result: ProcessingResult)
-    suspend fun findById(id: Uuid): IncomingMessage?
+    suspend fun save(messageId: Uuid, receivedAt: Instant, result: ProcessingResult)
+    suspend fun findByMessageId(messageId: Uuid): IncomingMessage?
 }
 
 class ExposedMessageRepository(private val database: Database) : MessageRepository {
-    override suspend fun save(id: Uuid, receivedAt: Instant, result: ProcessingResult): Unit =
+    override suspend fun save(messageId: Uuid, receivedAt: Instant, result: ProcessingResult): Unit =
         suspendTransaction(database) {
             ProcessedMessages.insert {
-                it[ProcessedMessages.id] = id
+                it[ProcessedMessages.messageId] = messageId
                 it[ProcessedMessages.receivedAt] = receivedAt
                 it[ProcessedMessages.result] = result
             }
         }
 
-    override suspend fun findById(id: Uuid): IncomingMessage? = suspendTransaction(database) {
+    override suspend fun findByMessageId(messageId: Uuid): IncomingMessage? = suspendTransaction(database) {
         ProcessedMessages.selectAll()
-            .where { ProcessedMessages.id eq id }
+            .where { ProcessedMessages.messageId eq messageId }
             .singleOrNull()
-            ?.let { IncomingMessage(it[ProcessedMessages.id], it[ProcessedMessages.receivedAt], it[ProcessedMessages.result]) }
+            ?.let {
+                IncomingMessage(
+                    id = it[ProcessedMessages.id],
+                    messageId = it[ProcessedMessages.messageId],
+                    receivedAt = it[ProcessedMessages.receivedAt],
+                    result = it[ProcessedMessages.result]
+                )
+            }
     }
 }

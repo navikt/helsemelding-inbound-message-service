@@ -27,14 +27,14 @@ class MessageRepositorySpec : StringSpec(
                 val database = database(postgresContainer.jdbcUrl)
                 val repository = ExposedMessageRepository(database)
 
-                val id = Uuid.random()
+                val messageId = Uuid.random()
                 val receivedAt = Clock.System.now()
 
-                repository.save(id, receivedAt, ProcessingResult.SUCCESS)
+                repository.save(messageId, receivedAt, ProcessingResult.SUCCESS)
 
-                val saved = repository.findById(id)
+                val saved = repository.findByMessageId(messageId)
                 saved shouldNotBe null
-                saved!!.id shouldBe id
+                saved!!.messageId shouldBe messageId
                 saved.result shouldBe ProcessingResult.SUCCESS
             }
         }
@@ -44,38 +44,38 @@ class MessageRepositorySpec : StringSpec(
                 val database = database(postgresContainer.jdbcUrl)
                 val repository = ExposedMessageRepository(database)
 
-                val id = Uuid.random()
+                val messageId = Uuid.random()
 
-                repository.save(id, Clock.System.now(), ProcessingResult.PUBLISHING_TO_KAFKA_FAILED)
+                repository.save(messageId, Clock.System.now(), ProcessingResult.PUBLISHING_TO_KAFKA_FAILED)
 
-                val saved = repository.findById(id)
+                val saved = repository.findByMessageId(messageId)
                 saved!!.result shouldBe ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
             }
         }
 
-        "findById should return saved message" {
+        "findByMessageId should return saved message" {
             resourceScope {
                 val database = database(postgresContainer.jdbcUrl)
                 val repository = ExposedMessageRepository(database)
 
-                val id = Uuid.random()
+                val messageId = Uuid.random()
                 val receivedAt = Clock.System.now().truncatedToMicroseconds()
-                repository.save(id, receivedAt, ProcessingResult.SUCCESS)
+                repository.save(messageId, receivedAt, ProcessingResult.SUCCESS)
 
-                val found = repository.findById(id)
+                val found = repository.findByMessageId(messageId)
                 found shouldNotBe null
-                found!!.id shouldBe id
+                found!!.messageId shouldBe messageId
                 found.receivedAt shouldBe receivedAt
                 found.result shouldBe ProcessingResult.SUCCESS
             }
         }
 
-        "findById should return null for unknown id" {
+        "findByMessageId should return null for unknown messageId" {
             resourceScope {
                 val database = database(postgresContainer.jdbcUrl)
                 val repository = ExposedMessageRepository(database)
 
-                val result = repository.findById(Uuid.random())
+                val result = repository.findByMessageId(Uuid.random())
 
                 result shouldBe null
             }

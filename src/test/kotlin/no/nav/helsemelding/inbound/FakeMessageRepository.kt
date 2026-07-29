@@ -8,10 +8,11 @@ import kotlin.uuid.Uuid
 
 class FakeMessageRepository : MessageRepository {
     private val messages = mutableMapOf<Uuid, IncomingMessage>()
+    private var idCounter = 0L
 
-    override suspend fun save(id: Uuid, receivedAt: Instant, result: ProcessingResult) {
-        messages[id] = IncomingMessage(id, receivedAt, result)
+    override suspend fun save(messageId: Uuid, receivedAt: Instant, result: ProcessingResult) {
+        messages[messageId] = IncomingMessage(++idCounter, messageId, receivedAt, result)
     }
 
-    override suspend fun findById(id: Uuid): IncomingMessage? = messages[id]
+    override suspend fun findByMessageId(messageId: Uuid): IncomingMessage? = messages[messageId]
 }
