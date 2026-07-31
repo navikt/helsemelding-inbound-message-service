@@ -73,4 +73,11 @@ spec:
         - application: azure-token-generator
           namespace: aura
           cluster: dev-gcp
+  gcp:
+    sqlInstances:
+      - type: POSTGRES_17
+        tier: db-f1-micro
+        databases:
+          - name: inbound-message-service-db
+            envVarPrefix: POSTGRES
   env:

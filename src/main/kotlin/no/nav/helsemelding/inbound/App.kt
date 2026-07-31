@@ -12,6 +12,7 @@ import io.ktor.utils.io.CancellationException
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import kotlinx.coroutines.awaitCancellation
 import no.nav.helsemelding.inbound.metrics.CustomMetrics
+import no.nav.helsemelding.inbound.persistence.repository.ExposedMessageRepository
 import no.nav.helsemelding.inbound.plugin.configureMetrics
 import no.nav.helsemelding.inbound.plugin.configureRoutes
 import no.nav.helsemelding.inbound.publisher.DialogMessagePublisher
@@ -43,7 +44,8 @@ fun main() = SuspendApp {
                 dialogMessagePublisher,
                 attachmentService,
                 messageConverter,
-                metrics
+                metrics,
+                ExposedMessageRepository(deps.database)
             )
 
             scheduleProcessMessages(poller)
