@@ -21,5 +21,8 @@ spec:
       application: inbound-message-service
       team: helsemelding
     - access: read
+      application: inbound-processing-service
+      team: helsemelding
+    - access: read
       application: kafka-manager
       team: helsemelding
