@@ -18,7 +18,7 @@ import no.nav.helsemelding.inbound.plugin.configureRoutes
 import no.nav.helsemelding.inbound.publisher.DialogMessagePublisher
 import no.nav.helsemelding.inbound.service.AttachmentStorageService
 import no.nav.helsemelding.inbound.service.PollerService
-import no.nav.helsemelding.message.converter.MsgHeadMessageConverter
+import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 
 private val log = KotlinLogging.logger {}
 

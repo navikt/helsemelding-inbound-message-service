@@ -16,7 +16,7 @@ import no.nav.helsemelding.inbound.FakeMessagePublisher
 import no.nav.helsemelding.inbound.FakeMessageRepository
 import no.nav.helsemelding.inbound.metrics.FakeMetrics
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
-import no.nav.helsemelding.message.converter.MsgHeadMessageConverter
+import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
 import java.util.Base64

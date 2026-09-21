@@ -24,11 +24,11 @@ import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.registerDuration
 import no.nav.helsemelding.inbound.util.withSpan
-import no.nav.helsemelding.message.converter.MsgHeadMessageConverter
+import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 import java.util.Base64
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
-import no.nav.helsemelding.message.model.Attachment as ConverterAttachment
+import no.nav.helsemelding.messageconverter.model.Attachment as ConverterAttachment
 
 private val log = KotlinLogging.logger {}
 private val tracer = GlobalOpenTelemetry.getTracer("PollerService")
