@@ -83,9 +83,12 @@ class PollerServiceSpec : StringSpec(
         }
 
         "Incoming message should be processed" {
-            val messageId = Uuid.random()
+            val externalMessageId = Uuid.random()
 
             val xml = readFileToString("message/incomingDialogMessage.xml")
+            val xmlMessageId = messageConverter.extractMessageId(xml).getOrElse {
+                error("Failed to extract message ID from test XML: $it")
+            }
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
 
             ediAdapterClient.givenGetBusinessDocumentResponse(
@@ -114,7 +117,7 @@ class PollerServiceSpec : StringSpec(
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
             val message = Message(
-                id = messageId,
+                id = externalMessageId,
                 isAppRec = false,
                 receiverHerId = FAGSYSTEM_HER_ID
             )
@@ -123,16 +126,19 @@ class PollerServiceSpec : StringSpec(
 
             result shouldBe true
 
-            publisher.publishedKey shouldBe messageId.toString()
+            publisher.publishedKey shouldBe xmlMessageId.toString()
             String(publisher.publishedPayload!!) shouldBe messageConverter.expectedPayload(xml)
             publisher.publishedAttachmentCount shouldBe 0
-            messageRepository.findByMessageId(messageId)!!.result shouldBe ProcessingResult.SUCCESS
+            messageRepository.findByMessageId(externalMessageId)!!.result shouldBe ProcessingResult.SUCCESS
         }
 
         "Incoming message with attachments should save attachments and publish message without attachments" {
-            val messageId = Uuid.random()
+            val externalMessageId = Uuid.random()
 
             val xml = readFileToString("message_with_attachments.xml")
+            val xmlMessageId = messageConverter.extractMessageId(xml).getOrElse {
+                error("Failed to extract message ID from test XML: $it")
+            }
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
 
             ediAdapterClient.givenGetBusinessDocumentResponse(
@@ -161,7 +167,7 @@ class PollerServiceSpec : StringSpec(
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
 
             val message = Message(
-                id = messageId,
+                id = externalMessageId,
                 isAppRec = false,
                 receiverHerId = FAGSYSTEM_HER_ID
             )
@@ -171,7 +177,7 @@ class PollerServiceSpec : StringSpec(
             result shouldBe true
 
             attachmentService.saveAttachmentsCallCount shouldBe 1
-            attachmentService.savedMessageId shouldBe messageId
+            attachmentService.savedMessageId shouldBe xmlMessageId
 
             val savedAttachments = attachmentService.savedAttachments!!
             savedAttachments.map { it.description } shouldBe listOf(
@@ -193,6 +199,7 @@ class PollerServiceSpec : StringSpec(
             publishedPayload.contains("Testvedlegg 3") shouldBe false
             publishedPayload.contains("Base64Container") shouldBe false
 
+            publisher.publishedKey shouldBe xmlMessageId.toString()
             publisher.publishedAttachmentCount shouldBe 3
         }
 
@@ -219,8 +226,35 @@ class PollerServiceSpec : StringSpec(
             messageRepository.findByMessageId(messageId)!!.result shouldBe ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
         }
 
-        "Incoming message should not be processed if parsing business document fails" {
-            val messageId = Uuid.random()
+        "Incoming message should not be processed if splitting the business document fails" {
+            val externalMessageId = Uuid.random()
+
+            val xml = readFileToString("message_with_attachments.xml")
+                .replace("Base64Container", "InvalidAttachmentContent")
+            val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
+
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                Right(
+                    GetBusinessDocumentResponse(
+                        businessDocument = encoded,
+                        contentType = "application/xml",
+                        contentTransferEncoding = "base64"
+                    )
+                )
+            )
+
+            val message = Message(
+                id = externalMessageId,
+                isAppRec = false,
+                receiverHerId = FAGSYSTEM_HER_ID
+            )
+
+            pollerService.processMessage(message) shouldBe false
+            messageRepository.findByMessageId(externalMessageId)!!.result shouldBe ProcessingResult.SPLITTING_MESSAGE_FAILED
+        }
+
+        "Incoming message should not be processed if extracting message ID fails" {
+            val externalMessageId = Uuid.random()
 
             val xml = "<MsgHead>"
             val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
@@ -236,13 +270,40 @@ class PollerServiceSpec : StringSpec(
             )
 
             val message = Message(
-                id = messageId,
+                id = externalMessageId,
                 isAppRec = false,
                 receiverHerId = FAGSYSTEM_HER_ID
             )
 
             pollerService.processMessage(message) shouldBe false
-            messageRepository.findByMessageId(messageId)!!.result shouldBe ProcessingResult.SPLITTING_MESSAGE_FAILED
+            messageRepository.findByMessageId(externalMessageId)!!.result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
+        }
+
+        "Incoming message should not be processed if message ID is invalid" {
+            val externalMessageId = Uuid.random()
+
+            val xml = readFileToString("message/incomingDialogMessage.xml")
+                .replace("1e9b0104-fd84-4d29-824f-154d7f501262", "invalid-message-id")
+            val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
+
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                Right(
+                    GetBusinessDocumentResponse(
+                        businessDocument = encoded,
+                        contentType = "application/xml",
+                        contentTransferEncoding = "base64"
+                    )
+                )
+            )
+
+            val message = Message(
+                id = externalMessageId,
+                isAppRec = false,
+                receiverHerId = FAGSYSTEM_HER_ID
+            )
+
+            pollerService.processMessage(message) shouldBe false
+            messageRepository.findByMessageId(externalMessageId)!!.result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
         }
 
         "Incoming message should not be processed if saving attachments fails" {
