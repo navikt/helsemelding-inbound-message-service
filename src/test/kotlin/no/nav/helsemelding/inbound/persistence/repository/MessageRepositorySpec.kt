@@ -32,9 +32,9 @@ class MessageRepositorySpec : StringSpec(
 
                 repository.save(messageId, receivedAt, ProcessingResult.SUCCESS)
 
-                val saved = repository.findByMessageId(messageId)
+                val saved = repository.findByExternalMessageId(messageId)
                 saved shouldNotBe null
-                saved!!.messageId shouldBe messageId
+                saved!!.externalMessageId shouldBe messageId
                 saved.result shouldBe ProcessingResult.SUCCESS
             }
         }
@@ -48,12 +48,12 @@ class MessageRepositorySpec : StringSpec(
 
                 repository.save(messageId, Clock.System.now(), ProcessingResult.PUBLISHING_TO_KAFKA_FAILED)
 
-                val saved = repository.findByMessageId(messageId)
+                val saved = repository.findByExternalMessageId(messageId)
                 saved!!.result shouldBe ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
             }
         }
 
-        "findByMessageId should return saved message" {
+        "findByExternalMessageId should return saved message" {
             resourceScope {
                 val database = database(postgresContainer.jdbcUrl)
                 val repository = ExposedMessageRepository(database)
@@ -62,20 +62,20 @@ class MessageRepositorySpec : StringSpec(
                 val receivedAt = Clock.System.now().truncatedToMicroseconds()
                 repository.save(messageId, receivedAt, ProcessingResult.SUCCESS)
 
-                val found = repository.findByMessageId(messageId)
+                val found = repository.findByExternalMessageId(messageId)
                 found shouldNotBe null
-                found!!.messageId shouldBe messageId
+                found!!.externalMessageId shouldBe messageId
                 found.receivedAt shouldBe receivedAt
                 found.result shouldBe ProcessingResult.SUCCESS
             }
         }
 
-        "findByMessageId should return null for unknown messageId" {
+        "findByExternalMessageId should return null for unknown externalMessageId" {
             resourceScope {
                 val database = database(postgresContainer.jdbcUrl)
                 val repository = ExposedMessageRepository(database)
 
-                val result = repository.findByMessageId(Uuid.random())
+                val result = repository.findByExternalMessageId(Uuid.random())
 
                 result shouldBe null
             }

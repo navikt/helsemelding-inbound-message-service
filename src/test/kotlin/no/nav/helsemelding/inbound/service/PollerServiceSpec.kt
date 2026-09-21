@@ -129,7 +129,7 @@ class PollerServiceSpec : StringSpec(
             publisher.publishedKey shouldBe xmlMessageId.toString()
             String(publisher.publishedPayload!!) shouldBe messageConverter.expectedPayload(xml)
             publisher.publishedAttachmentCount shouldBe 0
-            messageRepository.findByMessageId(externalMessageId)!!.result shouldBe ProcessingResult.SUCCESS
+            messageRepository.findByExternalMessageId(externalMessageId)!!.result shouldBe ProcessingResult.SUCCESS
         }
 
         "Incoming message with attachments should save attachments and publish message without attachments" {
@@ -223,7 +223,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
-            messageRepository.findByMessageId(messageId)!!.result shouldBe ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
+            messageRepository.findByExternalMessageId(messageId)!!.result shouldBe ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
         }
 
         "Incoming message should not be processed if splitting the business document fails" {
@@ -250,7 +250,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
-            messageRepository.findByMessageId(externalMessageId)!!.result shouldBe ProcessingResult.SPLITTING_MESSAGE_FAILED
+            messageRepository.findByExternalMessageId(externalMessageId)!!.result shouldBe ProcessingResult.SPLITTING_MESSAGE_FAILED
         }
 
         "Incoming message should not be processed if extracting message ID fails" {
@@ -276,7 +276,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
-            messageRepository.findByMessageId(externalMessageId)!!.result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
+            messageRepository.findByExternalMessageId(externalMessageId)!!.result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
         }
 
         "Incoming message should not be processed if message ID is invalid" {
@@ -303,7 +303,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
-            messageRepository.findByMessageId(externalMessageId)!!.result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
+            messageRepository.findByExternalMessageId(externalMessageId)!!.result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
         }
 
         "Incoming message should not be processed if saving attachments fails" {
@@ -333,7 +333,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
-            messageRepository.findByMessageId(messageId)!!.result shouldBe ProcessingResult.SAVING_ATTACHMENTS_FAILED
+            messageRepository.findByExternalMessageId(messageId)!!.result shouldBe ProcessingResult.SAVING_ATTACHMENTS_FAILED
         }
 
         "Incoming message should not be processed if publishing to Kafka fails" {
@@ -365,7 +365,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
-            messageRepository.findByMessageId(messageId)!!.result shouldBe ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
+            messageRepository.findByExternalMessageId(messageId)!!.result shouldBe ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
         }
 
         "Incoming message should not be processed if marking as read fails" {
@@ -404,7 +404,7 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe false
-            messageRepository.findByMessageId(messageId)!!.result shouldBe ProcessingResult.MARKING_MESSAGE_AS_READ_FAILED
+            messageRepository.findByExternalMessageId(messageId)!!.result shouldBe ProcessingResult.MARKING_MESSAGE_AS_READ_FAILED
         }
 
         "Incoming message should not be processed if sending apprec fails" {
@@ -448,7 +448,7 @@ class PollerServiceSpec : StringSpec(
             val result = pollerService.processMessage(message)
 
             result shouldBe false
-            messageRepository.findByMessageId(messageId)!!.result shouldBe ProcessingResult.SENDING_APPREC_FAILED
+            messageRepository.findByExternalMessageId(messageId)!!.result shouldBe ProcessingResult.SENDING_APPREC_FAILED
         }
     }
 )
