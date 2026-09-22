@@ -27,14 +27,14 @@ class MessageRepositorySpec : StringSpec(
                 val database = database(postgresContainer.jdbcUrl)
                 val repository = ExposedMessageRepository(database)
 
-                val messageId = Uuid.random()
+                val externalMessageId = Uuid.random()
                 val receivedAt = Clock.System.now()
 
-                repository.save(messageId, receivedAt, ProcessingResult.SUCCESS)
+                repository.save(externalMessageId, receivedAt, ProcessingResult.SUCCESS)
 
-                val saved = repository.findByExternalMessageId(messageId)
+                val saved = repository.findByExternalMessageId(externalMessageId)
                 saved shouldNotBe null
-                saved!!.externalMessageId shouldBe messageId
+                saved!!.externalMessageId shouldBe externalMessageId
                 saved.result shouldBe ProcessingResult.SUCCESS
             }
         }
@@ -44,11 +44,11 @@ class MessageRepositorySpec : StringSpec(
                 val database = database(postgresContainer.jdbcUrl)
                 val repository = ExposedMessageRepository(database)
 
-                val messageId = Uuid.random()
+                val externalMessageId = Uuid.random()
 
-                repository.save(messageId, Clock.System.now(), ProcessingResult.PUBLISHING_TO_KAFKA_FAILED)
+                repository.save(externalMessageId, Clock.System.now(), ProcessingResult.PUBLISHING_TO_KAFKA_FAILED)
 
-                val saved = repository.findByExternalMessageId(messageId)
+                val saved = repository.findByExternalMessageId(externalMessageId)
                 saved!!.result shouldBe ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
             }
         }
@@ -58,13 +58,13 @@ class MessageRepositorySpec : StringSpec(
                 val database = database(postgresContainer.jdbcUrl)
                 val repository = ExposedMessageRepository(database)
 
-                val messageId = Uuid.random()
+                val externalMessageId = Uuid.random()
                 val receivedAt = Clock.System.now().truncatedToMicroseconds()
-                repository.save(messageId, receivedAt, ProcessingResult.SUCCESS)
+                repository.save(externalMessageId, receivedAt, ProcessingResult.SUCCESS)
 
-                val found = repository.findByExternalMessageId(messageId)
+                val found = repository.findByExternalMessageId(externalMessageId)
                 found shouldNotBe null
-                found!!.externalMessageId shouldBe messageId
+                found!!.externalMessageId shouldBe externalMessageId
                 found.receivedAt shouldBe receivedAt
                 found.result shouldBe ProcessingResult.SUCCESS
             }
