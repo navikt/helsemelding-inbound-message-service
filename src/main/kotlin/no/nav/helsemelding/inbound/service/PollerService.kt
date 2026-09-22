@@ -24,11 +24,11 @@ import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.registerDuration
 import no.nav.helsemelding.inbound.util.withSpan
-import no.nav.helsemelding.message.converter.MsgHeadMessageConverter
+import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 import java.util.Base64
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
-import no.nav.helsemelding.message.model.Attachment as ConverterAttachment
+import no.nav.helsemelding.messageconverter.model.Attachment as ConverterAttachment
 
 private val log = KotlinLogging.logger {}
 private val tracer = GlobalOpenTelemetry.getTracer("PollerService")
@@ -86,38 +86,46 @@ class PollerService(
 
     internal suspend fun processMessage(message: Message): Boolean {
         return tracer.withSpan("Process incoming message") {
-            val messageId = requireNotNull(message.id)
+            val externalMessageId = requireNotNull(message.id)
             val receiverHerId = requireNotNull(message.receiverHerId)
 
-            log.info { "Processing message: $messageId" }
+            log.info { "Processing message: $externalMessageId" }
             when (message.isAppRec) {
-                true -> processAppRec(messageId, receiverHerId)
+                true -> processAppRec(externalMessageId, receiverHerId)
                 else -> registerDuration(metrics::registerIncomingMessageProcessingDuration) {
                     val receivedAt = Clock.System.now()
-                    val result = processIncomingMessage(messageId, receiverHerId)
-                    messageRepository.save(messageId, receivedAt, result)
+                    val result = processIncomingMessage(externalMessageId, receiverHerId)
+                    messageRepository.save(externalMessageId, receivedAt, result)
                     result == ProcessingResult.SUCCESS
                 }
             }
         }
     }
 
-    private suspend fun processAppRec(messageId: Uuid, receiverHerId: Int): Boolean {
+    private suspend fun processAppRec(externalMessageId: Uuid, receiverHerId: Int): Boolean {
         // TODO: Can be removed when outbound-message-service handles apprec
-        log.info { "Processing apprec: $messageId" }
+        log.info { "Processing apprec: $externalMessageId" }
         metrics.registerIncomingMessageReceived(true)
 
-        return markMessageAsRead(messageId, receiverHerId)
+        return markMessageAsRead(externalMessageId, receiverHerId)
     }
 
-    private suspend fun processIncomingMessage(messageId: Uuid, receiverHerId: Int): ProcessingResult {
-        log.info { "Processing incoming message: $messageId" }
+    private suspend fun processIncomingMessage(externalMessageId: Uuid, receiverHerId: Int): ProcessingResult {
+        log.info { "Processing incoming message: $externalMessageId" }
         metrics.registerIncomingMessageReceived()
 
-        val businessDocumentBase64 = getBusinessDocument(messageId)
+        val businessDocumentBase64 = getBusinessDocument(externalMessageId)
             ?: return ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
 
         val businessDocument = String(Base64.getDecoder().decode(businessDocumentBase64))
+
+        val messageId = messageConverter
+            .extractMessageId(businessDocument)
+            .getOrElse {
+                metrics.registerIncomingMessageFailed(ErrorTypeTag.EXTRACTING_MESSAGE_ID_FAILED)
+                return ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
+            }
+
         val splitMessage = messageConverter
             .splitAttachments(businessDocument)
             .getOrElse {
@@ -141,11 +149,11 @@ class PollerService(
         )
         if (!isPublishingSuccessful) return ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
 
-        val isMarkedAsRead = markMessageAsRead(messageId, receiverHerId)
+        val isMarkedAsRead = markMessageAsRead(externalMessageId, receiverHerId)
         if (!isMarkedAsRead) return ProcessingResult.MARKING_MESSAGE_AS_READ_FAILED
 
         // TODO: Temporary solution. Application receipt should be sent as a result of receiving feedback from fagsystem.
-        return if (sendAppRec(messageId, receiverHerId)) {
+        return if (sendAppRec(externalMessageId, receiverHerId)) {
             ProcessingResult.SUCCESS
         } else {
             ProcessingResult.SENDING_APPREC_FAILED

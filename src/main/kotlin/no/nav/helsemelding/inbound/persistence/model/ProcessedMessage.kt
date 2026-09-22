@@ -5,7 +5,7 @@ import kotlin.uuid.Uuid
 
 data class ProcessedMessage(
     val id: Long,
-    val messageId: Uuid,
+    val externalMessageId: Uuid,
     val receivedAt: Instant,
     val result: ProcessingResult
 )

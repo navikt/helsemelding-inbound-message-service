@@ -27,7 +27,7 @@ dependencyResolutionManagement {
             version("kotlin-kafka", "0.4.1")
             version("edi-adapter-client", "0.1.0")
             version("attachment-client", "0.0.2")
-            version("message-converter", "0.0.1-SNAPSHOT")
+            version("message-converter", "0.0.9")
             version("hikari", "6.3.0")
             version("exposed", "1.0.0-rc-3")
             version("flyway", "11.8.0")

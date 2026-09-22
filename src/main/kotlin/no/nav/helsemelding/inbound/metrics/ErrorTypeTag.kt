@@ -6,5 +6,6 @@ enum class ErrorTypeTag(val value: String) {
     MARKING_MESSAGE_AS_READ_FAILED("marking_message_as_read_failed"),
     SENDING_APPREC_FAILED("sending_apprec_failed"),
     SPLITTING_MESSAGE_FAILED("splitting_message_failed"),
-    SAVING_ATTACHMENTS_FAILED("saving_attachments_failed")
+    SAVING_ATTACHMENTS_FAILED("saving_attachments_failed"),
+    EXTRACTING_MESSAGE_ID_FAILED("extracting_message_id_failed")
 }

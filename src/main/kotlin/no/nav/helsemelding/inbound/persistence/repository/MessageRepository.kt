@@ -16,34 +16,34 @@ import kotlin.uuid.Uuid
 object ProcessedMessages : Table("processed_messages") {
     val id = long("id").autoIncrement()
     override val primaryKey = PrimaryKey(id)
-    val messageId = uuid("message_id").transform(UuidTransformer())
+    val externalMessageId = uuid("external_message_id").transform(UuidTransformer())
     val receivedAt = timestamp("received_at")
     val result = enumerationByName("result", 50, ProcessingResult::class)
 }
 
 interface MessageRepository {
-    suspend fun save(messageId: Uuid, receivedAt: Instant, result: ProcessingResult)
-    suspend fun findByMessageId(messageId: Uuid): ProcessedMessage?
+    suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult)
+    suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage?
 }
 
 class ExposedMessageRepository(private val database: Database) : MessageRepository {
-    override suspend fun save(messageId: Uuid, receivedAt: Instant, result: ProcessingResult): Unit =
+    override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult): Unit =
         suspendTransaction(database) {
             ProcessedMessages.insert {
-                it[ProcessedMessages.messageId] = messageId
+                it[ProcessedMessages.externalMessageId] = externalMessageId
                 it[ProcessedMessages.receivedAt] = receivedAt
                 it[ProcessedMessages.result] = result
             }
         }
 
-    override suspend fun findByMessageId(messageId: Uuid): ProcessedMessage? = suspendTransaction(database) {
+    override suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage? = suspendTransaction(database) {
         ProcessedMessages.selectAll()
-            .where { ProcessedMessages.messageId eq messageId }
+            .where { ProcessedMessages.externalMessageId eq externalMessageId }
             .singleOrNull()
             ?.let {
                 ProcessedMessage(
                     id = it[ProcessedMessages.id],
-                    messageId = it[ProcessedMessages.messageId],
+                    externalMessageId = it[ProcessedMessages.externalMessageId],
                     receivedAt = it[ProcessedMessages.receivedAt],
                     result = it[ProcessedMessages.result]
                 )
