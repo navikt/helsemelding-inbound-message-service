@@ -9,17 +9,16 @@ import java.util.concurrent.TimeUnit
 private val log = KotlinLogging.logger {}
 
 interface Metrics {
-    fun registerIncomingMessageReceived(isApprec: Boolean = false)
+    fun registerIncomingMessageReceived()
     fun registerIncomingMessageFailed(errorType: ErrorTypeTag)
     fun registerIncomingMessageProcessingDuration(durationNanos: Long)
 }
 
 class CustomMetrics(val registry: MeterRegistry) : Metrics {
 
-    override fun registerIncomingMessageReceived(isApprec: Boolean) {
+    override fun registerIncomingMessageReceived() {
         Counter.builder("helsemelding_incoming_messages_received")
             .description("Number of incoming messages received from NHN")
-            .tag("is_apprec", isApprec.toString())
             .register(registry)
             .increment()
     }
@@ -42,8 +41,8 @@ class CustomMetrics(val registry: MeterRegistry) : Metrics {
 }
 
 class FakeMetrics() : Metrics {
-    override fun registerIncomingMessageReceived(isApprec: Boolean) {
-        log.info { "helsemelding_incoming_messages_received metric is registered with is_apprec: $isApprec" }
+    override fun registerIncomingMessageReceived() {
+        log.info { "helsemelding_incoming_messages_received metric is registered" }
     }
 
     override fun registerIncomingMessageFailed(errorType: ErrorTypeTag) {
