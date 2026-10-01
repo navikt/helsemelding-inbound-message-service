@@ -8,8 +8,8 @@ The service polls EDI Adapter for incoming messages for a configured HER-id.
 
 Each message is processed depending on its type:
 
-1. If the message is an `AppRec`, the service marks it as read using EDI Adapter.
-2. If the message is a normal incoming message, the service:
+1. If the message is an `AppRec`, the service ignores it. `helsemelding-outbound-message-service` processes AppRecs.
+2. For a normal incoming message, the service:
    - fetches the business document using EDI Adapter.
    - decodes the Base64 encoded XML payload,
    - deserializes the `MsgHead` XML,

@@ -85,29 +85,23 @@ class PollerService(
     }
 
     internal suspend fun processMessage(message: Message): Boolean {
+        if (message.isAppRec == true) {
+            log.info { "Ignoring AppRec: ${message.id}" }
+            return true
+        }
+
         return tracer.withSpan("Process incoming message") {
             val externalMessageId = requireNotNull(message.id)
             val receiverHerId = requireNotNull(message.receiverHerId)
 
             log.info { "Processing message: $externalMessageId" }
-            when (message.isAppRec) {
-                true -> processAppRec(externalMessageId, receiverHerId)
-                else -> registerDuration(metrics::registerIncomingMessageProcessingDuration) {
-                    val receivedAt = Clock.System.now()
-                    val result = processIncomingMessage(externalMessageId, receiverHerId)
-                    messageRepository.save(externalMessageId, receivedAt, result)
-                    result == ProcessingResult.SUCCESS
-                }
+            registerDuration(metrics::registerIncomingMessageProcessingDuration) {
+                val receivedAt = Clock.System.now()
+                val result = processIncomingMessage(externalMessageId, receiverHerId)
+                messageRepository.save(externalMessageId, receivedAt, result)
+                result == ProcessingResult.SUCCESS
             }
         }
-    }
-
-    private suspend fun processAppRec(externalMessageId: Uuid, receiverHerId: Int): Boolean {
-        // TODO: Can be removed when outbound-message-service handles apprec
-        log.info { "Processing apprec: $externalMessageId" }
-        metrics.registerIncomingMessageReceived(true)
-
-        return markMessageAsRead(externalMessageId, receiverHerId)
     }
 
     private suspend fun processIncomingMessage(externalMessageId: Uuid, receiverHerId: Int): ProcessingResult {
