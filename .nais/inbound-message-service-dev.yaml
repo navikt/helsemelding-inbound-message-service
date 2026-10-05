@@ -80,4 +80,3 @@ spec:
         databases:
           - name: inbound-message-service-db
             envVarPrefix: POSTGRES
-  env:
