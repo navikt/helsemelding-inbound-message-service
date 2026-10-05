@@ -86,7 +86,7 @@ class PollerService(
 
     internal suspend fun processMessage(message: Message): Boolean {
         if (message.isAppRec == true) {
-            log.info { "Ignoring AppRec: ${message.id}" }
+            log.debug { "Ignoring AppRec: ${message.id}" }
             return true
         }
 
