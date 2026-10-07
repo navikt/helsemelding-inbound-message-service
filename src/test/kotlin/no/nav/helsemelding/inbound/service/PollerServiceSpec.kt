@@ -49,10 +49,8 @@ class PollerServiceSpec : StringSpec(
             )
         }
 
-        "Apprec should be processed" {
+        "Apprec should be ignored" {
             val externalMessageId = Uuid.random()
-
-            ediAdapterClient.givenMarkAsRead(Right(true))
 
             val message = Message(
                 id = externalMessageId,
@@ -61,25 +59,9 @@ class PollerServiceSpec : StringSpec(
             )
 
             pollerService.processMessage(message) shouldBe true
-        }
-
-        "Apprec should not be processed if EDI Adapter returns error" {
-            val externalMessageId = Uuid.random()
-
-            val errorMessage500 = ErrorMessage(
-                error = "Internal Server Error",
-                errorCode = 500,
-                requestId = Uuid.random().toString()
-            )
-            ediAdapterClient.givenMarkAsRead(Left(errorMessage500))
-
-            val message = Message(
-                id = externalMessageId,
-                isAppRec = true,
-                receiverHerId = FAGSYSTEM_HER_ID
-            )
-
-            pollerService.processMessage(message) shouldBe false
+            messageRepository.findByExternalMessageId(externalMessageId) shouldBe null
+            publisher.publishedPayload shouldBe null
+            attachmentService.saveAttachmentsCallCount shouldBe 0
         }
 
         "Incoming message should be processed" {
