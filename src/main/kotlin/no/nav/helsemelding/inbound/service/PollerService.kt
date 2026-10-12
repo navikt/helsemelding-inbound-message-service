@@ -39,7 +39,8 @@ class PollerService(
     private val attachmentService: AttachmentService,
     private val messageConverter: MsgHeadMessageConverter,
     private val metrics: Metrics,
-    private val messageRepository: MessageRepository
+    private val messageRepository: MessageRepository,
+    private val validationService: ValidationService
 ) {
     private val pollerConfig = config().poller
 
@@ -126,6 +127,12 @@ class PollerService(
                 metrics.registerIncomingMessageFailed(ErrorTypeTag.SPLITTING_MESSAGE_FAILED)
                 return ProcessingResult.SPLITTING_MESSAGE_FAILED
             }
+
+        if (!validationService.validate(splitMessage)) {
+            log.error { "Validation failed for message: $externalMessageId" }
+            metrics.registerIncomingMessageFailed(ErrorTypeTag.VALIDATING_MESSAGE_FAILED)
+            return ProcessingResult.VALIDATING_MESSAGE_FAILED
+        }
 
         if (!splitMessage.attachments.isEmpty()) {
             attachmentService
