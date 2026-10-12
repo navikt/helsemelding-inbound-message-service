@@ -11,6 +11,7 @@ import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.json.Json
+import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.model.ScanResult
 import no.nav.helsemelding.messageconverter.model.Attachment
 import java.io.IOException
@@ -19,9 +20,9 @@ import java.util.Base64
 private val log = KotlinLogging.logger {}
 
 class ClamAvClient(
-    private val endpointUrl: String,
     private val httpClient: HttpClient
 ) {
+    private val endpointUrl = config().clamAv.url
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun scanAttachments(attachments: List<Attachment>): List<ScanResult> {

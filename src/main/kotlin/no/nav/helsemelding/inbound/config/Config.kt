@@ -14,12 +14,17 @@ data class Config(
     val ediAdapter: EdiAdapter,
     val poller: Poller,
     val kafka: Kafka,
-    val database: Database
+    val database: Database,
+    val clamAv: ClamAv
 ) {
     init {
         require(poller.fetchLimit in 1..100, { "fetchLimit must be between 1..100" })
     }
 }
+
+data class ClamAv(
+    val url: String
+)
 
 data class Server(
     val port: Port,

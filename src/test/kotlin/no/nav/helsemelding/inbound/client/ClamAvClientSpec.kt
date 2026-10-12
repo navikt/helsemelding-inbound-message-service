@@ -30,7 +30,8 @@ class ClamAvClientSpec : StringSpec(
         "Should send decoded attachments as multipart and read results" {
             val engine = MockEngine { request ->
                 request.method shouldBe HttpMethod.Post
-                request.url.toString() shouldBe "http://clamav/api/v2/scan"
+                request.url.toString() shouldBe "http://clamav.nais-system.svc.cluster.local/api/v2/scan"
+
                 val body = request.body.toByteArray().decodeToString()
                 body shouldContain content
                 body shouldNotContain attachment.contentBase64
@@ -64,7 +65,7 @@ class ClamAvClientSpec : StringSpec(
             }
 
             HttpClient(engine).use { httpClient ->
-                val results = ClamAvClient("http://clamav/", httpClient)
+                val results = ClamAvClient(httpClient)
                     .scanAttachments(listOf(attachment, attachment))
 
                 results shouldBe listOf(
@@ -90,8 +91,9 @@ class ClamAvClientSpec : StringSpec(
                 respond(content)
             }
             HttpClient(engine).use { httpClient ->
-                ClamAvClient("http://clamav", httpClient).scanAttachments(listOf(attachment)) shouldBe
-                    listOf(ScanResult("file0", ScanStatus.ERROR, error = "Scan failed"))
+                val results = ClamAvClient(httpClient).scanAttachments(listOf(attachment))
+
+                results shouldBe listOf(ScanResult("file0", ScanStatus.ERROR, error = "Scan failed"))
             }
         }
 
@@ -101,7 +103,7 @@ class ClamAvClientSpec : StringSpec(
             }
             HttpClient(engine).use { httpClient ->
                 shouldThrow<IOException> {
-                    ClamAvClient("http://clamav", httpClient).scanAttachments(listOf(attachment))
+                    ClamAvClient(httpClient).scanAttachments(listOf(attachment))
                 }
             }
         }
@@ -109,7 +111,9 @@ class ClamAvClientSpec : StringSpec(
         "Should skip requests when there are no attachments" {
             val engine = MockEngine { error("No request expected") }
             HttpClient(engine).use { httpClient ->
-                ClamAvClient("http://clamav", httpClient).scanAttachments(emptyList()) shouldBe emptyList()
+                val results = ClamAvClient(httpClient).scanAttachments(emptyList())
+
+                results shouldBe emptyList()
             }
         }
 
@@ -117,7 +121,7 @@ class ClamAvClientSpec : StringSpec(
             val engine = MockEngine { error("No request expected") }
             HttpClient(engine).use { httpClient ->
                 shouldThrow<IllegalArgumentException> {
-                    ClamAvClient("http://clamav", httpClient)
+                    ClamAvClient(httpClient)
                         .scanAttachments(listOf(attachment.copy(contentBase64 = "invalid!")))
                 }
             }
