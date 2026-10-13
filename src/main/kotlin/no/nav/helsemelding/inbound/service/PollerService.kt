@@ -128,7 +128,7 @@ class PollerService(
                 return ProcessingResult.SPLITTING_MESSAGE_FAILED
             }
 
-        if (!validationService.validate(splitMessage)) {
+        if (!validationService.validate(splitMessage, messageId)) {
             log.error { "Validation failed for message: $externalMessageId" }
             metrics.registerIncomingMessageFailed(ErrorTypeTag.VALIDATING_MESSAGE_FAILED)
             return ProcessingResult.VALIDATING_MESSAGE_FAILED

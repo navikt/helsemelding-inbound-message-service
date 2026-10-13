@@ -6,19 +6,24 @@ import no.nav.helsemelding.inbound.client.ClamAvClient
 import no.nav.helsemelding.inbound.model.ScanStatus
 import no.nav.helsemelding.messageconverter.model.Attachment
 import no.nav.helsemelding.messageconverter.model.SplitMessage
+import kotlin.uuid.Uuid
 
 private val log = KotlinLogging.logger {}
 
 fun interface ValidationService {
-    suspend fun validate(splitMessage: SplitMessage): Boolean
+    suspend fun validate(splitMessage: SplitMessage, messageId: Uuid): Boolean
 }
 
 class MessageValidationService(
     private val clamAvClient: ClamAvClient
 ) : ValidationService {
-    override suspend fun validate(splitMessage: SplitMessage): Boolean {
+    override suspend fun validate(
+        splitMessage: SplitMessage,
+        messageId: Uuid
+    ): Boolean {
         if (!checkAttachmentsForViruses(splitMessage.attachments)) return false
 
+        log.debug { "Message $messageId validated successfully" }
         return true
     }
 

@@ -12,11 +12,13 @@ import no.nav.helsemelding.inbound.client.ClamAvClient
 import no.nav.helsemelding.messageconverter.model.Attachment
 import no.nav.helsemelding.messageconverter.model.SplitMessage
 import java.io.IOException
+import kotlin.uuid.Uuid
 
 class MessageValidationServiceSpec : StringSpec(
     {
         val attachment = Attachment("Test attachment", "text/plain", "dGVzdA==")
         val message = SplitMessage("<MsgHead/>", listOf(attachment, attachment))
+        val messageId = Uuid.random()
 
         "Should accept attachments when all scanning results are OK" {
             val engine = MockEngine {
@@ -29,8 +31,10 @@ class MessageValidationServiceSpec : StringSpec(
                     """.trimIndent()
                 )
             }
+
             HttpClient(engine).use { client ->
-                MessageValidationService(ClamAvClient(client)).validate(message) shouldBe true
+                val validationService = MessageValidationService(ClamAvClient(client))
+                validationService.validate(message, messageId) shouldBe true
             }
         }
 
@@ -46,8 +50,10 @@ class MessageValidationServiceSpec : StringSpec(
                         """.trimIndent()
                     )
                 }
+
                 HttpClient(engine).use { client ->
-                    MessageValidationService(ClamAvClient(client)).validate(message) shouldBe false
+                    val validationService = MessageValidationService(ClamAvClient(client))
+                    validationService.validate(message, messageId) shouldBe false
                 }
             }
         }
@@ -60,49 +66,61 @@ class MessageValidationServiceSpec : StringSpec(
                 """[{"filename": "file0"}]"""
             ).forEach { response ->
                 val engine = MockEngine { respond(response) }
+
                 HttpClient(engine).use { client ->
-                    MessageValidationService(ClamAvClient(client)).validate(message) shouldBe false
+                    val validationService = MessageValidationService(ClamAvClient(client))
+                    validationService.validate(message, messageId) shouldBe false
                 }
             }
         }
 
         "Should reject attachments on HTTP errors" {
             val engine = MockEngine { respond("Failed", HttpStatusCode.InternalServerError) }
+
             HttpClient(engine).use { client ->
-                MessageValidationService(ClamAvClient(client)).validate(message) shouldBe false
+                val validationService = MessageValidationService(ClamAvClient(client))
+                validationService.validate(message, messageId) shouldBe false
             }
         }
 
         "Should reject attachments on network errors" {
             val engine = MockEngine { throw IOException("Connection failed") }
+
             HttpClient(engine).use { client ->
-                MessageValidationService(ClamAvClient(client)).validate(message) shouldBe false
+                val validationService = MessageValidationService(ClamAvClient(client))
+                validationService.validate(message, messageId) shouldBe false
             }
         }
 
         "Should reject invalid Base64 without sending a request" {
             val engine = MockEngine { error("No request expected") }
+
             HttpClient(engine).use { client ->
                 val invalidMessage = message.copy(
                     attachments = listOf(attachment.copy(contentBase64 = "invalid!"))
                 )
-                MessageValidationService(ClamAvClient(client)).validate(invalidMessage) shouldBe false
+
+                val validationService = MessageValidationService(ClamAvClient(client))
+                validationService.validate(invalidMessage, messageId) shouldBe false
             }
         }
 
         "Should accept messages without attachments without sending a request" {
             val engine = MockEngine { error("No request expected") }
+
             HttpClient(engine).use { client ->
-                MessageValidationService(ClamAvClient(client))
-                    .validate(message.copy(attachments = emptyList())) shouldBe true
+                val validationService = MessageValidationService(ClamAvClient(client))
+                validationService.validate(message.copy(attachments = emptyList()), messageId) shouldBe true
             }
         }
 
         "Should propagate coroutine cancellation" {
             val engine = MockEngine { throw CancellationException("Cancelled") }
+
             HttpClient(engine).use { client ->
                 shouldThrow<CancellationException> {
-                    MessageValidationService(ClamAvClient(client)).validate(message)
+                    val validationService = MessageValidationService(ClamAvClient(client))
+                    validationService.validate(message, messageId)
                 }
             }
         }
