@@ -15,6 +15,8 @@ Each message is processed depending on its type:
    - deserializes the `MsgHead` XML,
    - extracts attachments from the message,
    - removes the attachments from the `MsgHead` XML,
+   - validates the message
+     - scans attachments with ClamAV's V2 API. Messages without attachments skip the scan. Every scan result must be `OK`
    - saves the extracted attachments using Attachment Service,
    - publishes the `MsgHead` XML without attachments to Kafka,
    - marks the original message as read using EDI Adapter,
