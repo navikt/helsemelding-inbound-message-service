@@ -12,7 +12,7 @@ class FakeValidationService : ValidationService {
         validationResult = result
     }
 
-    override fun validate(splitMessage: SplitMessage): Boolean {
+    override suspend fun validate(splitMessage: SplitMessage): Boolean {
         validatedMessage = splitMessage
         return validationResult
     }

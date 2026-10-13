@@ -1,11 +1,49 @@
 package no.nav.helsemelding.inbound.service
 
+import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
+import no.nav.helsemelding.inbound.client.ClamAvClient
+import no.nav.helsemelding.inbound.model.ScanStatus
+import no.nav.helsemelding.messageconverter.model.Attachment
 import no.nav.helsemelding.messageconverter.model.SplitMessage
 
+private val log = KotlinLogging.logger {}
+
 fun interface ValidationService {
-    fun validate(splitMessage: SplitMessage): Boolean
+    suspend fun validate(splitMessage: SplitMessage): Boolean
 }
 
-class MessageValidationService : ValidationService {
-    override fun validate(splitMessage: SplitMessage): Boolean = true
+class MessageValidationService(
+    private val clamAvClient: ClamAvClient
+) : ValidationService {
+    override suspend fun validate(splitMessage: SplitMessage): Boolean {
+        if (!checkAttachmentsForViruses(splitMessage.attachments)) return false
+
+        return true
+    }
+
+    private suspend fun checkAttachmentsForViruses(attachments: List<Attachment>): Boolean {
+        if (attachments.isEmpty()) return true
+
+        val results = try {
+            clamAvClient.scanAttachments(attachments)
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            return scanningFailed(error)
+        }
+
+        val valid = results.isNotEmpty() && results.all {
+            it.result == ScanStatus.OK
+        }
+
+        if (!valid) {
+            log.warn { "ClamAV validation failed: scanning did not confirm clean attachments" }
+        }
+        return valid
+    }
+
+    private fun scanningFailed(error: Exception): Boolean {
+        log.error { "ClamAV validation failed: ${error.javaClass.simpleName}" }
+        return false
+    }
 }
