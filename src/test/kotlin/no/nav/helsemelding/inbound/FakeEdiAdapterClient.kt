@@ -1,75 +1,76 @@
-package no.nav.helsemelding.inbound.service
+package no.nav.helsemelding.inbound
 
 import arrow.core.Either
-import arrow.core.Either.Left
+import arrow.core.left
+import arrow.core.right
+import kotlinx.coroutines.flow.Flow
 import no.nav.helsemelding.ediadapter.client.EdiAdapterClient
-import no.nav.helsemelding.ediadapter.client.ExperimentalEdiAdapterApi
-import no.nav.helsemelding.ediadapter.model.ApprecInfo
-import no.nav.helsemelding.ediadapter.model.ErrorMessage
-import no.nav.helsemelding.ediadapter.model.GetBusinessDocumentResponse
-import no.nav.helsemelding.ediadapter.model.GetMessagesRequest
-import no.nav.helsemelding.ediadapter.model.GetNoticesRequest
-import no.nav.helsemelding.ediadapter.model.Message
-import no.nav.helsemelding.ediadapter.model.Metadata
-import no.nav.helsemelding.ediadapter.model.Notice
-import no.nav.helsemelding.ediadapter.model.PostAppRecRequest
-import no.nav.helsemelding.ediadapter.model.PostMessageRequest
-import no.nav.helsemelding.ediadapter.model.PostMshConfigurationRequest
-import no.nav.helsemelding.ediadapter.model.StatusInfo
+import no.nav.helsemelding.ediadapter.client.EdiAdapterError
+import no.nav.helsemelding.ediadapter.model.common.GetBusinessDocumentResponse
+import no.nav.helsemelding.ediadapter.model.v3.DeleteNotificationsRequest
+import no.nav.helsemelding.ediadapter.model.v3.GetMessageResponse
+import no.nav.helsemelding.ediadapter.model.v3.GetNotificationsResponse
+import no.nav.helsemelding.ediadapter.model.v3.GetStatusResponse
+import no.nav.helsemelding.ediadapter.model.v3.GetUnreadNotificationsResponse
+import no.nav.helsemelding.ediadapter.model.v3.MarkAsDownloadedRequest
+import no.nav.helsemelding.ediadapter.model.v3.Notification
+import no.nav.helsemelding.ediadapter.model.v3.PingResponse
+import no.nav.helsemelding.ediadapter.model.v3.PostAppRecRequest
+import no.nav.helsemelding.ediadapter.model.v3.PostApprecResponse
+import no.nav.helsemelding.ediadapter.model.v3.PostMessageRequest
+import no.nav.helsemelding.ediadapter.model.v3.PostMessageResponse
+import no.nav.helsemelding.ediadapter.model.v3.SetMshConfigurationsRequest
+import no.nav.helsemelding.ediadapter.model.v3.UnreadNotification
 import kotlin.uuid.Uuid
 
+@Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
 class FakeEdiAdapterClient : EdiAdapterClient {
-    private var getBusinessDocumentResponse: Either<ErrorMessage, GetBusinessDocumentResponse>? = null
-    private var markMessageAsReadResponse: Either<ErrorMessage, Boolean>? = null
-    private var postApprecResponse: Either<ErrorMessage, Metadata>? = null
+    var notifications: Flow<Either<EdiAdapterError, UnreadNotification>> = kotlinx.coroutines.flow.emptyFlow()
+    var deleteError: EdiAdapterError? = null
+    val notificationRequests = mutableListOf<List<Int>>()
+    val deleteRequests = mutableListOf<DeleteNotificationsRequest>()
+    val documentRequests = mutableListOf<Uuid>()
+    val downloadedRequests = mutableListOf<Pair<Uuid, MarkAsDownloadedRequest>>()
+    val apprecRequests = mutableListOf<Pair<Uuid, PostAppRecRequest>>()
+    var beforeDelete: suspend () -> Unit = {}
+    private var documentResponse: Either<EdiAdapterError, GetBusinessDocumentResponse> = unsupported()
+    private var downloadedResponse: Either<EdiAdapterError, Unit> = Unit.right()
+    private var apprecResponse: Either<EdiAdapterError, PostApprecResponse> = PostApprecResponse(Uuid.random()).right()
 
-    val errorMessage404 = ErrorMessage(
-        error = "Not Found",
-        errorCode = 404,
-        requestId = Uuid.random().toString()
-    )
+    fun givenMarkAsDownloaded(response: Either<EdiAdapterError, Unit>) { downloadedResponse = response }
+    fun givenGetBusinessDocumentResponse(response: Either<EdiAdapterError, GetBusinessDocumentResponse>) { documentResponse = response }
+    fun givenPostApprecResponse(response: Either<EdiAdapterError, PostApprecResponse>) { apprecResponse = response }
 
-    fun givenMarkAsRead(isMarked: Either<ErrorMessage, Boolean>) {
-        markMessageAsReadResponse = isMarked
+    override fun streamUnreadNotifications(herIds: List<Int>): Flow<Either<EdiAdapterError, UnreadNotification>> {
+        notificationRequests += herIds
+        return notifications
     }
-
-    fun givenGetBusinessDocumentResponse(response: Either<ErrorMessage, GetBusinessDocumentResponse>) {
-        getBusinessDocumentResponse = response
+    override suspend fun deleteNotifications(request: DeleteNotificationsRequest): Either<EdiAdapterError, Unit> {
+        beforeDelete()
+        deleteRequests += request
+        return deleteError?.left() ?: Unit.right()
     }
-
-    fun givenPostApprecResponse(response: Either<ErrorMessage, Metadata>) {
-        postApprecResponse = response
+    override suspend fun getBusinessDocument(id: Uuid): Either<EdiAdapterError, GetBusinessDocumentResponse> {
+        documentRequests += id
+        return documentResponse
     }
-
-    override suspend fun getMessageStatus(id: Uuid): Either<ErrorMessage, List<StatusInfo>> = Left(errorMessage404)
-
-    override suspend fun getMessage(id: Uuid): Either<ErrorMessage, Message> = Left(errorMessage404)
-
-    override suspend fun getBusinessDocument(id: Uuid): Either<ErrorMessage, GetBusinessDocumentResponse> = getBusinessDocumentResponse!!
-
-    override suspend fun postApprec(
-        id: Uuid,
-        apprecSenderHerId: Int,
-        postAppRecRequest: PostAppRecRequest
-    ): Either<ErrorMessage, Metadata> = postApprecResponse!!
-
-    override suspend fun markMessageAsRead(id: Uuid, herId: Int): Either<ErrorMessage, Boolean> = markMessageAsReadResponse!!
-
-    override suspend fun getApprecInfo(id: Uuid): Either<ErrorMessage, List<ApprecInfo>> = Left(errorMessage404)
-
-    override suspend fun getMessages(getMessagesRequest: GetMessagesRequest): Either<ErrorMessage, List<Message>> =
-        Left(errorMessage404)
-
-    override suspend fun postMessage(postMessagesRequest: PostMessageRequest): Either<ErrorMessage, Metadata> =
-        Left(errorMessage404)
-
-    @ExperimentalEdiAdapterApi
-    override suspend fun postMshConfiguration(postMshConfigurationRequest: PostMshConfigurationRequest): Either<ErrorMessage, Unit> =
-        Left(errorMessage404)
-
-    @ExperimentalEdiAdapterApi
-    override suspend fun getNotices(getNoticesRequest: GetNoticesRequest): Either<ErrorMessage, List<Notice>> =
-        Left(errorMessage404)
-
+    override suspend fun markMessageAsDownloaded(id: Uuid, request: MarkAsDownloadedRequest): Either<EdiAdapterError, Unit> {
+        downloadedRequests += id to request
+        return downloadedResponse
+    }
+    override suspend fun postApprec(id: Uuid, request: PostAppRecRequest): Either<EdiAdapterError, PostApprecResponse> {
+        apprecRequests += id to request
+        return apprecResponse
+    }
+    override suspend fun setMshConfigurations(request: SetMshConfigurationsRequest): Either<EdiAdapterError, Unit> = Unit.right()
+    override suspend fun getNotifications(herIds: List<Int>, offset: Long, notificationsToFetch: Int?): Either<EdiAdapterError, GetNotificationsResponse> = unsupported()
+    override fun streamNotifications(herIds: List<Int>, offset: Long?): Flow<Either<EdiAdapterError, Notification>> = kotlinx.coroutines.flow.emptyFlow()
+    override suspend fun getUnreadNotifications(herIds: List<Int>, notificationsToFetch: Int?): Either<EdiAdapterError, GetUnreadNotificationsResponse> = unsupported()
+    override suspend fun getMessage(id: Uuid): Either<EdiAdapterError, GetMessageResponse> = unsupported()
+    override suspend fun getMessageStatus(id: Uuid): Either<EdiAdapterError, GetStatusResponse> = unsupported()
+    override suspend fun postMessage(request: PostMessageRequest): Either<EdiAdapterError, PostMessageResponse> = unsupported()
+    override suspend fun deleteMshConfigurations(herIds: List<Int>): Either<EdiAdapterError, Unit> = unsupported()
+    override suspend fun ping(): Either<EdiAdapterError, PingResponse> = unsupported()
     override fun close() {}
+    private fun <T> unsupported(): Either<EdiAdapterError, T> = EdiAdapterError.Api(404).left()
 }

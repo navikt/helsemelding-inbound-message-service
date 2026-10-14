@@ -2,12 +2,15 @@ package no.nav.helsemelding.inbound.persistence.repository
 
 import no.nav.helsemelding.inbound.persistence.model.ProcessedMessage
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
+import no.nav.helsemelding.inbound.persistence.model.RefusedMessage
 import no.nav.helsemelding.inbound.util.UuidTransformer
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
 import kotlin.time.Instant
@@ -24,9 +27,29 @@ object ProcessedMessages : Table("processed_messages") {
 interface MessageRepository {
     suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult)
     suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage?
+    suspend fun saveRefusedMessage(message: RefusedMessage)
+}
+
+object RefusedMessages : Table("refused_messages") {
+    val notificationId = uuid("notification_id").transform(UuidTransformer())
+    override val primaryKey = PrimaryKey(notificationId)
+    val externalMessageId = uuid("external_message_id").transform(UuidTransformer()).nullable()
+    val receiverHerId = integer("receiver_her_id")
+    val description = text("description").nullable()
+    val receivedAt = timestamp("received_at")
 }
 
 class ExposedMessageRepository(private val database: Database) : MessageRepository {
+    override suspend fun saveRefusedMessage(message: RefusedMessage): Unit = suspendTransaction(database) {
+        RefusedMessages.insertIgnore {
+            it[notificationId] = message.notificationId
+            it[externalMessageId] = message.externalMessageId
+            it[receiverHerId] = message.receiverHerId
+            it[description] = message.description
+            it[receivedAt] = message.receivedAt
+        }
+    }
+
     override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult): Unit =
         suspendTransaction(database) {
             ProcessedMessages.insert {
@@ -39,6 +62,8 @@ class ExposedMessageRepository(private val database: Database) : MessageReposito
     override suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage? = suspendTransaction(database) {
         ProcessedMessages.selectAll()
             .where { ProcessedMessages.externalMessageId eq externalMessageId }
+            .orderBy(ProcessedMessages.id, SortOrder.DESC)
+            .limit(1)
             .singleOrNull()
             ?.let {
                 ProcessedMessage(

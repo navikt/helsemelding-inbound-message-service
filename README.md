@@ -1,56 +1,66 @@
 # helsemelding-inbound-message-service
 
-Application responsible for processing incoming messages to NAV
+Application responsible for processing incoming messages to NAV.
 
 ## Overview
 
-The service polls EDI Adapter for incoming messages for a configured HER-id.
+`NotificationService` consumes EDI Adapter V3 unread notifications using
+`streamUnreadNotifications`. MSH is configured with notification channel `API` at startup.
+Consumption is sequential and cancelled before the EDI Adapter client is closed.
 
-Each message is processed depending on its type:
+The services share notification ownership:
 
-1. If the message is an `AppRec`, the service ignores it. `helsemelding-outbound-message-service` processes AppRecs.
-2. For a normal incoming message, the service:
-   - fetches the business document using EDI Adapter.
-   - decodes the Base64 encoded XML payload,
-   - deserializes the `MsgHead` XML,
-   - extracts attachments from the message,
-   - removes the attachments from the `MsgHead` XML,
-   - saves the extracted attachments using Attachment Service,
-   - publishes the `MsgHead` XML without attachments to Kafka,
-   - marks the original message as read using EDI Adapter,
-   - sends an `AppRec` to NHN using EDI Adapter.
+| Notification type | Owner |
+|---|---|
+| `NEW_MESSAGE`, `REFUSED_MESSAGE` | inbound-message-service |
+| `MESSAGE_SENT_STATE_UPDATED`, `MESSAGE_APPREC_INFO_UPDATED`, `MESSAGE_DELIVERY_STATE_UPDATED` | outbound-message-service |
 
-### Configuration
+For `NEW_MESSAGE`, inbound:
 
-Relevant configuration for adjusting the frequency of scheduler and how many messages to fetch.
+1. Fetches and decodes the Base64 XML business document.
+2. Extracts the XML message ID and attachments.
+3. Saves attachments using the XML message ID.
+4. Publishes XML without attachments to Kafka, keyed by the XML message ID and including the attachment count.
+5. Marks the EDI message as downloaded and sends an AppRec.
+6. Persists the processing result before deleting the notification.
 
-| Property          | Description                                                 | Type |
-|-------------------|-------------------------------------------------------------|------|
-| herId             | The receiver herId to fetch messages for (NAV)              | Int  |
-| fetchLimit        | Number of messages to fetch. Number between 1 and 100       | Int  |
-| batchSize         | Number of messages to process per batch                     | Int  |
-| scheduleInterval  | How often scheduler should poll for new messages            | Duration |
+AppRec is currently sent immediately after publication. It should eventually be sent after feedback
+from fagsystem.
 
-### Local development
+For `REFUSED_MESSAGE`, inbound persists the notification ID, optional EDI message ID, receiver HER ID,
+description and timestamp in `refused_messages`, then deletes the notification. Refused documents are
+unavailable for download, so this path does not fetch a document or publish XML.
 
-To run this service locally (without integration with Kafka and other services) change the following in App.kt:
+Failed processing leaves the notification undeleted and stops consumption, allowing it to be retried
+after application restart. Transport failures in the stream are reconnected by the client. Deletion
+failures are logged without stopping consumption. Replayed successful messages only retry notification
+deletion; recorded download/AppRec failures resume those steps without republishing to Kafka.
+Refusal persistence is idempotent by notification ID.
+
+Delivery remains at least once: a crash between Kafka publication and recording the processing result
+can cause a duplicate publication. Kafka consumers must tolerate this.
+
+## Configuration
+
+| Property | Description |
+|---|---|
+| `ediAdapter.receiverHerId` | Receiver HER ID; `RECEIVER_HER_ID`, default `8142519` |
+| `ediAdapter.scope` | Azure scope for EDI Adapter |
+
+Polling settings have been removed. Replace any `POLLER_HER_ID` environment override with
+`RECEIVER_HER_ID`.
+
+## Local development
+
+For local message processing, replace the notification service's external dependencies in `App.kt`:
+
 ```kotlin
-val poller = PollerService(
-    deps.ediAdapterClient,
-    dialogMessagePublisher,
-    attachmentService,
-    messageConverter,
-    metrics
-)
-```
-
-with local implementations of the dependencies:
-```kotlin
-val poller = PollerService(
+val notificationService = NotificationService(
     LocalEdiAdapterClient(),
     LocalMessagePublisher(),
     AttachmentStorageService(LocalAttachmentClient()),
     MsgHeadMessageConverter(),
-    FakeMetrics()
+    FakeMetrics(),
+    ExposedMessageRepository(deps.database)
 )
 ```

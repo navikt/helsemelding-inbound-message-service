@@ -25,7 +25,7 @@ dependencyResolutionManagement {
             version("opentelemetry-mdc", "2.24.0-alpha")
             version("opentelemetry-extension-kotlin", "1.58.0")
             version("kotlin-kafka", "0.4.1")
-            version("edi-adapter-client", "0.1.0")
+            version("edi-adapter-client", "0.5.0")
             version("attachment-client", "0.0.2")
             version("message-converter", "0.0.9")
             version("hikari", "6.3.0")
@@ -94,7 +94,7 @@ dependencyResolutionManagement {
             version("ktor", "3.5.1")
             version("ktor-server-test", "3.5.1")
             version("kotest", "5.9.1")
-            version("testcontainers", "1.18.1")
+            version("testcontainers", "1.21.4")
             version("kotest-extensions", "2.0.2")
             version("turbine", "1.2.0")
 
