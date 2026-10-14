@@ -1,7 +1,6 @@
 package no.nav.helsemelding.inbound.service
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.CancellationException
 import no.nav.helsemelding.inbound.client.ClamAvClient
 import no.nav.helsemelding.inbound.model.ScanStatus
 import no.nav.helsemelding.messageconverter.model.Attachment
@@ -33,24 +32,22 @@ class MessageValidationService(
     ): Boolean {
         if (attachments.isEmpty()) return true
 
-        val results = try {
-            clamAvClient.scanAttachments(attachments)
-        } catch (error: Exception) {
-            if (error is CancellationException) throw error
-            return scanningFailed(error, messageId)
-        }
+        val results = clamAvClient.scanAttachments(attachments).fold(
+            ifLeft = { error -> return scanningFailed(error, messageId) },
+            ifRight = { it }
+        )
 
-        val valid = results.isNotEmpty() && results.all {
+        val isValid = results.isNotEmpty() && results.all {
             it.result == ScanStatus.OK
         }
 
-        if (!valid) {
+        if (!isValid) {
             log.warn { "ClamAV validation failed: scanning did not confirm safe attachments for message $messageId" }
         }
-        return valid
+        return isValid
     }
 
-    private fun scanningFailed(error: Exception, messageId: Uuid): Boolean {
+    private fun scanningFailed(error: Throwable, messageId: Uuid): Boolean {
         log.error(error) { "ClamAV validation failed for message $messageId" }
         return false
     }

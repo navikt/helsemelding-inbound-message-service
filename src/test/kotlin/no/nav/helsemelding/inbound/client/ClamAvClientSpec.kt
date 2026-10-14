@@ -1,6 +1,7 @@
 package no.nav.helsemelding.inbound.client
 
-import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.arrow.core.shouldBeLeft
+import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -68,7 +69,7 @@ class ClamAvClientSpec : StringSpec(
                 val results = ClamAvClient(httpClient)
                     .scanAttachments(listOf(attachment, attachment))
 
-                results shouldBe listOf(
+                results.shouldBeRight() shouldBe listOf(
                     ScanResult("file0", ScanStatus.OK),
                     ScanResult("file1", ScanStatus.FOUND, virus = "Shai-Hulud")
                 )
@@ -93,7 +94,7 @@ class ClamAvClientSpec : StringSpec(
             HttpClient(engine).use { httpClient ->
                 val results = ClamAvClient(httpClient).scanAttachments(listOf(attachment))
 
-                results shouldBe listOf(ScanResult("file0", ScanStatus.ERROR, error = "Scan failed"))
+                results.shouldBeRight() shouldBe listOf(ScanResult("file0", ScanStatus.ERROR, error = "Scan failed"))
             }
         }
 
@@ -102,9 +103,9 @@ class ClamAvClientSpec : StringSpec(
                 respond("Scan failed", HttpStatusCode.InternalServerError)
             }
             HttpClient(engine).use { httpClient ->
-                shouldThrow<IOException> {
-                    ClamAvClient(httpClient).scanAttachments(listOf(attachment))
-                }
+                val error = ClamAvClient(httpClient).scanAttachments(listOf(attachment)).shouldBeLeft()
+                error::class shouldBe IOException::class
+                error.message shouldBe "ClamAV scan failed with HTTP 500"
             }
         }
 
@@ -113,17 +114,18 @@ class ClamAvClientSpec : StringSpec(
             HttpClient(engine).use { httpClient ->
                 val results = ClamAvClient(httpClient).scanAttachments(emptyList())
 
-                results shouldBe emptyList()
+                results.shouldBeRight() shouldBe emptyList()
             }
         }
 
         "Should throw an error if attachments with invalid Base64" {
             val engine = MockEngine { error("No request expected") }
             HttpClient(engine).use { httpClient ->
-                shouldThrow<IllegalArgumentException> {
-                    ClamAvClient(httpClient)
-                        .scanAttachments(listOf(attachment.copy(contentBase64 = "invalid!")))
-                }
+                val error = ClamAvClient(httpClient)
+                    .scanAttachments(listOf(attachment.copy(contentBase64 = "invalid!")))
+                    .shouldBeLeft()
+
+                error::class shouldBe IllegalArgumentException::class
             }
         }
     }
