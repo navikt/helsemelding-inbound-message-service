@@ -12,14 +12,9 @@ import kotlin.time.Duration
 data class Config(
     val server: Server,
     val ediAdapter: EdiAdapter,
-    val poller: Poller,
     val kafka: Kafka,
     val database: Database
-) {
-    init {
-        require(poller.fetchLimit in 1..100, { "fetchLimit must be between 1..100" })
-    }
-}
+)
 
 data class Server(
     val port: Port,
@@ -27,18 +22,12 @@ data class Server(
 )
 
 data class EdiAdapter(
-    val scope: Scope
+    val scope: Scope,
+    val receiverHerId: Int
 ) {
     @JvmInline
     value class Scope(val value: String)
 }
-
-data class Poller(
-    val herId: Int,
-    val fetchLimit: Int,
-    val batchSize: Int,
-    val scheduleInterval: Duration
-)
 
 data class Kafka(
     val groupId: String,
