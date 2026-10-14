@@ -34,7 +34,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(message, messageId) shouldBe true
+                validationService.isValid(message, messageId) shouldBe true
             }
         }
 
@@ -53,7 +53,7 @@ class MessageValidationServiceSpec : StringSpec(
 
                 HttpClient(engine).use { client ->
                     val validationService = MessageValidationService(ClamAvClient(client))
-                    validationService.validate(message, messageId) shouldBe false
+                    validationService.isValid(message, messageId) shouldBe false
                 }
             }
         }
@@ -69,7 +69,7 @@ class MessageValidationServiceSpec : StringSpec(
 
                 HttpClient(engine).use { client ->
                     val validationService = MessageValidationService(ClamAvClient(client))
-                    validationService.validate(message, messageId) shouldBe false
+                    validationService.isValid(message, messageId) shouldBe false
                 }
             }
         }
@@ -79,7 +79,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(message, messageId) shouldBe false
+                validationService.isValid(message, messageId) shouldBe false
             }
         }
 
@@ -88,7 +88,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(message, messageId) shouldBe false
+                validationService.isValid(message, messageId) shouldBe false
             }
         }
 
@@ -101,7 +101,7 @@ class MessageValidationServiceSpec : StringSpec(
                 )
 
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(invalidMessage, messageId) shouldBe false
+                validationService.isValid(invalidMessage, messageId) shouldBe false
             }
         }
 
@@ -110,7 +110,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(message.copy(attachments = emptyList()), messageId) shouldBe true
+                validationService.isValid(message.copy(attachments = emptyList()), messageId) shouldBe true
             }
         }
 
@@ -120,7 +120,7 @@ class MessageValidationServiceSpec : StringSpec(
             HttpClient(engine).use { client ->
                 shouldThrow<CancellationException> {
                     val validationService = MessageValidationService(ClamAvClient(client))
-                    validationService.validate(message, messageId)
+                    validationService.isValid(message, messageId)
                 }
             }
         }

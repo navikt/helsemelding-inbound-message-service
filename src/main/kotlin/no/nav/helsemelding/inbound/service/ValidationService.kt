@@ -11,23 +11,23 @@ import kotlin.uuid.Uuid
 private val log = KotlinLogging.logger {}
 
 fun interface ValidationService {
-    suspend fun validate(splitMessage: SplitMessage, messageId: Uuid): Boolean
+    suspend fun isValid(splitMessage: SplitMessage, messageId: Uuid): Boolean
 }
 
 class MessageValidationService(
     private val clamAvClient: ClamAvClient
 ) : ValidationService {
-    override suspend fun validate(
+    override suspend fun isValid(
         splitMessage: SplitMessage,
         messageId: Uuid
     ): Boolean {
-        if (!checkAttachmentsForViruses(splitMessage.attachments)) return false
+        if (!isAttachmentSafe(splitMessage.attachments)) return false
 
         log.debug { "Message $messageId validated successfully" }
         return true
     }
 
-    private suspend fun checkAttachmentsForViruses(attachments: List<Attachment>): Boolean {
+    private suspend fun isAttachmentSafe(attachments: List<Attachment>): Boolean {
         if (attachments.isEmpty()) return true
 
         val results = try {
@@ -42,7 +42,7 @@ class MessageValidationService(
         }
 
         if (!valid) {
-            log.warn { "ClamAV validation failed: scanning did not confirm clean attachments" }
+            log.warn { "ClamAV validation failed: scanning did not confirm safe attachments" }
         }
         return valid
     }
