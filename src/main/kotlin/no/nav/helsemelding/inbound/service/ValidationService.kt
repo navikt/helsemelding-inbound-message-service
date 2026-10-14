@@ -21,20 +21,23 @@ class MessageValidationService(
         splitMessage: SplitMessage,
         messageId: Uuid
     ): Boolean {
-        if (!isAttachmentSafe(splitMessage.attachments)) return false
+        if (!isAttachmentSafe(splitMessage.attachments, messageId)) return false
 
         log.debug { "Message $messageId validated successfully" }
         return true
     }
 
-    private suspend fun isAttachmentSafe(attachments: List<Attachment>): Boolean {
+    private suspend fun isAttachmentSafe(
+        attachments: List<Attachment>,
+        messageId: Uuid
+    ): Boolean {
         if (attachments.isEmpty()) return true
 
         val results = try {
             clamAvClient.scanAttachments(attachments)
         } catch (error: Exception) {
             if (error is CancellationException) throw error
-            return scanningFailed(error)
+            return scanningFailed(error, messageId)
         }
 
         val valid = results.isNotEmpty() && results.all {
@@ -42,13 +45,13 @@ class MessageValidationService(
         }
 
         if (!valid) {
-            log.warn { "ClamAV validation failed: scanning did not confirm safe attachments" }
+            log.warn { "ClamAV validation failed: scanning did not confirm safe attachments for message $messageId" }
         }
         return valid
     }
 
-    private fun scanningFailed(error: Exception): Boolean {
-        log.error { "ClamAV validation failed: ${error.javaClass.simpleName}" }
+    private fun scanningFailed(error: Exception, messageId: Uuid): Boolean {
+        log.error(error) { "ClamAV validation failed for message $messageId" }
         return false
     }
 }
