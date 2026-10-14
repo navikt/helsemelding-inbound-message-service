@@ -7,6 +7,7 @@ import org.apache.kafka.clients.producer.RecordMetadata
 private val log = KotlinLogging.logger {}
 
 class FakeMessagePublisher : MessagePublisher {
+    var publishCount = 0
     var publishedKey: String? = null
     var publishedPayload: ByteArray? = null
     var publishedAttachmentCount: Int? = null
@@ -18,6 +19,7 @@ class FakeMessagePublisher : MessagePublisher {
     }
 
     override suspend fun publish(key: String, payload: ByteArray, attachmentCount: Int): Result<RecordMetadata> {
+        publishCount++
         publishedKey = key
         publishedPayload = payload
         publishedAttachmentCount = attachmentCount
