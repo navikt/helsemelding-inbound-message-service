@@ -9,6 +9,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
 import no.nav.helsemelding.inbound.client.ClamAvClient
+import no.nav.helsemelding.inbound.persistence.model.ValidationResult
 import no.nav.helsemelding.messageconverter.model.Attachment
 import no.nav.helsemelding.messageconverter.model.SplitMessage
 import java.io.IOException
@@ -34,7 +35,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.isValid(message, messageId) shouldBe true
+                validationService.validate(message, messageId) shouldBe ValidationResult.OK
             }
         }
 
@@ -53,7 +54,7 @@ class MessageValidationServiceSpec : StringSpec(
 
                 HttpClient(engine).use { client ->
                     val validationService = MessageValidationService(ClamAvClient(client))
-                    validationService.isValid(message, messageId) shouldBe false
+                    validationService.validate(message, messageId) shouldBe ValidationResult.VIRUS_DETECTED
                 }
             }
         }
@@ -69,7 +70,7 @@ class MessageValidationServiceSpec : StringSpec(
 
                 HttpClient(engine).use { client ->
                     val validationService = MessageValidationService(ClamAvClient(client))
-                    validationService.isValid(message, messageId) shouldBe false
+                    validationService.validate(message, messageId) shouldBe ValidationResult.VIRUS_DETECTED
                 }
             }
         }
@@ -79,7 +80,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.isValid(message, messageId) shouldBe false
+                validationService.validate(message, messageId) shouldBe ValidationResult.VIRUS_DETECTED
             }
         }
 
@@ -88,7 +89,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.isValid(message, messageId) shouldBe false
+                validationService.validate(message, messageId) shouldBe ValidationResult.VIRUS_DETECTED
             }
         }
 
@@ -101,7 +102,7 @@ class MessageValidationServiceSpec : StringSpec(
                 )
 
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.isValid(invalidMessage, messageId) shouldBe false
+                validationService.validate(invalidMessage, messageId) shouldBe ValidationResult.VIRUS_DETECTED
             }
         }
 
@@ -110,7 +111,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.isValid(message.copy(attachments = emptyList()), messageId) shouldBe true
+                validationService.validate(message.copy(attachments = emptyList()), messageId) shouldBe ValidationResult.OK
             }
         }
 
@@ -120,7 +121,7 @@ class MessageValidationServiceSpec : StringSpec(
             HttpClient(engine).use { client ->
                 shouldThrow<CancellationException> {
                     val validationService = MessageValidationService(ClamAvClient(client))
-                    validationService.isValid(message, messageId)
+                    validationService.validate(message, messageId)
                 }
             }
         }

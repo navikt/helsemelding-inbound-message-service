@@ -3,6 +3,7 @@ package no.nav.helsemelding.inbound.service
 import io.github.oshai.kotlinlogging.KotlinLogging
 import no.nav.helsemelding.inbound.client.ClamAvClient
 import no.nav.helsemelding.inbound.model.ScanStatus
+import no.nav.helsemelding.inbound.persistence.model.ValidationResult
 import no.nav.helsemelding.messageconverter.model.Attachment
 import no.nav.helsemelding.messageconverter.model.SplitMessage
 import kotlin.uuid.Uuid
@@ -10,20 +11,20 @@ import kotlin.uuid.Uuid
 private val log = KotlinLogging.logger {}
 
 fun interface ValidationService {
-    suspend fun isValid(splitMessage: SplitMessage, messageId: Uuid): Boolean
+    suspend fun validate(splitMessage: SplitMessage, messageId: Uuid): ValidationResult
 }
 
 class MessageValidationService(
     private val clamAvClient: ClamAvClient
 ) : ValidationService {
-    override suspend fun isValid(
+    override suspend fun validate(
         splitMessage: SplitMessage,
         messageId: Uuid
-    ): Boolean {
-        if (!isAttachmentSafe(splitMessage.attachments, messageId)) return false
+    ): ValidationResult {
+        if (!isAttachmentSafe(splitMessage.attachments, messageId)) return ValidationResult.VIRUS_DETECTED
 
         log.debug { "Message $messageId validated successfully" }
-        return true
+        return ValidationResult.OK
     }
 
     private suspend fun isAttachmentSafe(

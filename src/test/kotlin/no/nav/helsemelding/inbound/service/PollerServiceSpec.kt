@@ -17,6 +17,7 @@ import no.nav.helsemelding.inbound.FakeMessageRepository
 import no.nav.helsemelding.inbound.FakeValidationService
 import no.nav.helsemelding.inbound.metrics.FakeMetrics
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
+import no.nav.helsemelding.inbound.persistence.model.ValidationResult
 import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
@@ -311,7 +312,7 @@ class PollerServiceSpec : StringSpec(
                     )
                 )
             )
-            validationService.givenValidationResult(false)
+            validationService.givenValidationResult(ValidationResult.VIRUS_DETECTED)
 
             val message = Message(
                 id = externalMessageId,
@@ -326,7 +327,7 @@ class PollerServiceSpec : StringSpec(
             publisher.publishedPayload shouldBe null
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
-            result shouldBe ProcessingResult.VALIDATING_MESSAGE_FAILED
+            result shouldBe ProcessingResult.VIRUS_DETECTED
         }
 
         "Incoming message should not be processed if saving attachments fails" {
