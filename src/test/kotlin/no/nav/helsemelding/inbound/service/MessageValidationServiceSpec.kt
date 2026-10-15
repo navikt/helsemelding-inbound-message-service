@@ -61,16 +61,16 @@ class MessageValidationServiceSpec : StringSpec(
 
         "Should reject empty, malformed or unexpected scanning results" {
             listOf(
-                "[]",
-                "invalid JSON",
-                """[{"filename": "file0", "result": "UNKNOWN"}]""",
-                """[{"filename": "file0"}]"""
-            ).forEach { response ->
+                "[]" to ValidationResult.VIRUS_SCAN_FAILED,
+                "invalid JSON" to ValidationResult.VIRUS_SCAN_FAILED,
+                """[{"filename": "file0", "result": "UNKNOWN"}]""" to ValidationResult.VIRUS_SCAN_FAILED,
+                """[{"filename": "file0"}]""" to ValidationResult.VIRUS_SCAN_FAILED
+            ).forEach { (response, expected) ->
                 val engine = MockEngine { respond(response) }
 
                 HttpClient(engine).use { client ->
                     val validationService = MessageValidationService(ClamAvClient(client))
-                    validationService.validate(message, messageId) shouldBe ValidationResult.VIRUS_DETECTED
+                    validationService.validate(message, messageId) shouldBe expected
                 }
             }
         }
@@ -80,7 +80,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(message, messageId) shouldBe ValidationResult.VIRUS_DETECTED
+                validationService.validate(message, messageId) shouldBe ValidationResult.VIRUS_SCAN_FAILED
             }
         }
 
@@ -89,7 +89,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(message, messageId) shouldBe ValidationResult.VIRUS_DETECTED
+                validationService.validate(message, messageId) shouldBe ValidationResult.VIRUS_SCAN_FAILED
             }
         }
 
@@ -102,7 +102,7 @@ class MessageValidationServiceSpec : StringSpec(
                 )
 
                 val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(invalidMessage, messageId) shouldBe ValidationResult.VIRUS_DETECTED
+                validationService.validate(invalidMessage, messageId) shouldBe ValidationResult.VIRUS_SCAN_FAILED
             }
         }
 

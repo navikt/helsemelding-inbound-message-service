@@ -21,35 +21,40 @@ class MessageValidationService(
         splitMessage: SplitMessage,
         messageId: Uuid
     ): ValidationResult {
-        if (!isAttachmentSafe(splitMessage.attachments, messageId)) return ValidationResult.VIRUS_DETECTED
+        val result = checkAttachmentsForViruses(splitMessage.attachments, messageId)
+        if (result != ValidationResult.OK) return result
 
         log.debug { "Message $messageId validated successfully" }
         return ValidationResult.OK
     }
 
-    private suspend fun isAttachmentSafe(
+    private suspend fun checkAttachmentsForViruses(
         attachments: List<Attachment>,
         messageId: Uuid
-    ): Boolean {
-        if (attachments.isEmpty()) return true
+    ): ValidationResult {
+        if (attachments.isEmpty()) return ValidationResult.OK
 
         val results = clamAvClient.scanAttachments(attachments).fold(
             ifLeft = { error -> return scanningFailed(error, messageId) },
             ifRight = { it }
         )
 
-        val isValid = results.isNotEmpty() && results.all {
-            it.result == ScanStatus.OK
+        if (results.isEmpty()) {
+            return ValidationResult.VIRUS_SCAN_FAILED
         }
+
+        val isValid = results.all { it.result == ScanStatus.OK }
 
         if (!isValid) {
             log.warn { "ClamAV validation failed: scanning did not confirm safe attachments for message $messageId" }
+            return ValidationResult.VIRUS_DETECTED
         }
-        return isValid
+
+        return ValidationResult.OK
     }
 
-    private fun scanningFailed(error: Throwable, messageId: Uuid): Boolean {
+    private fun scanningFailed(error: Throwable, messageId: Uuid): ValidationResult {
         log.error(error) { "ClamAV validation failed for message $messageId" }
-        return false
+        return ValidationResult.VIRUS_SCAN_FAILED
     }
 }
