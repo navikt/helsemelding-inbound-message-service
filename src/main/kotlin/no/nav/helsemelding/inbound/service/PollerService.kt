@@ -131,7 +131,7 @@ class PollerService(
 
         val validationResult = validationService.validate(splitMessage, messageId)
         if (validationResult != ValidationResult.OK) {
-            log.error { "Validation failed for message $externalMessageId: $validationResult" }
+            log.error { "Validation failed for message $messageId: $validationResult" }
             metrics.registerIncomingMessageFailed(requireNotNull(validationResult.errorTypeTag))
             return requireNotNull(validationResult.processingResult)
         }
