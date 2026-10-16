@@ -16,6 +16,7 @@ Each message is processed depending on its type:
    - extracts attachments from the message,
    - removes the attachments from the `MsgHead` XML,
    - validates the message
+     - rejects "Henvendelse fra lege" and "Svar på forespørsel" messages when message text is missing or empty
      - scans attachments with ClamAV's V2 API. Messages without attachments skip the scan. Every scan result must be `OK`
    - saves the extracted attachments using Attachment Service,
    - publishes the `MsgHead` XML without attachments to Kafka,

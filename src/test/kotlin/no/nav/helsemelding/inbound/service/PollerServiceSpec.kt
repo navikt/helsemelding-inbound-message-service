@@ -330,6 +330,36 @@ class PollerServiceSpec : StringSpec(
             result shouldBe ProcessingResult.VIRUS_DETECTED
         }
 
+        "Incoming message with missing text should not be published" {
+            val externalMessageId = Uuid.random()
+            val xml = readFileToString("message_with_attachments.xml")
+            val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
+
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                Right(
+                    GetBusinessDocumentResponse(
+                        businessDocument = encoded,
+                        contentType = "application/xml",
+                        contentTransferEncoding = "base64"
+                    )
+                )
+            )
+            validationService.givenValidationResult(ValidationResult.MISSING_MESSAGE_TEXT)
+
+            val message = Message(
+                id = externalMessageId,
+                isAppRec = false,
+                receiverHerId = FAGSYSTEM_HER_ID
+            )
+
+            pollerService.processMessage(message) shouldBe false
+
+            attachmentService.saveAttachmentsCallCount shouldBe 0
+            publisher.publishedPayload shouldBe null
+            val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
+            result shouldBe ProcessingResult.MISSING_MESSAGE_TEXT
+        }
+
         "Incoming message should not be processed if saving attachments fails" {
             val externalMessageId = Uuid.random()
 

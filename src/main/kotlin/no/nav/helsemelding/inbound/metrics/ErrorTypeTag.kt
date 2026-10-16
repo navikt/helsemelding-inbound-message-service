@@ -8,6 +8,7 @@ enum class ErrorTypeTag(val value: String) {
     SPLITTING_MESSAGE_FAILED("splitting_message_failed"),
     SAVING_ATTACHMENTS_FAILED("saving_attachments_failed"),
     EXTRACTING_MESSAGE_ID_FAILED("extracting_message_id_failed"),
+    MISSING_MESSAGE_TEXT("missing_message_text"),
     VIRUS_DETECTED("validating_virus_detected"),
     VIRUS_SCAN_FAILED("validating_virus_scan_failed")
 }

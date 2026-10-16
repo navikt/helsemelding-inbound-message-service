@@ -47,7 +47,7 @@ fun main() = SuspendApp {
                 messageConverter,
                 metrics,
                 ExposedMessageRepository(deps.database),
-                MessageValidationService(deps.clamAvClient)
+                MessageValidationService(deps.clamAvClient, messageConverter)
             )
 
             scheduleProcessMessages(poller)
