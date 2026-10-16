@@ -6,6 +6,9 @@ import arrow.fx.coroutines.await.awaitAll
 import com.zaxxer.hikari.HikariDataSource
 import io.github.nomisRev.kafka.publisher.KafkaPublisher
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.micrometer.prometheus.PrometheusConfig.DEFAULT
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import no.nav.helsemelding.attachmentclient.AttachmentClient
@@ -13,6 +16,7 @@ import no.nav.helsemelding.attachmentclient.HttpAttachmentClient
 import no.nav.helsemelding.ediadapter.client.EdiAdapterClient
 import no.nav.helsemelding.ediadapter.client.HttpEdiAdapterClient
 import no.nav.helsemelding.ediadapter.client.scopedAuthHttpClient
+import no.nav.helsemelding.inbound.client.ClamAvClient
 import no.nav.helsemelding.inbound.config.EdiAdapter
 import no.nav.helsemelding.inbound.config.Kafka
 import org.flywaydb.core.Flyway
@@ -28,7 +32,8 @@ data class Dependencies(
     val ediAdapterClient: EdiAdapterClient,
     val kafkaPublisher: KafkaPublisher<String, ByteArray>,
     val attachmentClient: AttachmentClient,
-    val database: Database
+    val database: Database,
+    val clamAvClient: ClamAvClient
 )
 
 internal suspend fun ResourceScope.metricsRegistry(): PrometheusMeterRegistry =
@@ -48,6 +53,7 @@ suspend fun ResourceScope.dependencies(): Dependencies = awaitAll {
     val ediAdapterClient = async { ediAdapterClient(config.ediAdapter) }
     val kafkaPublisher = async { kafkaPublisher(config.kafka) }
     val attachmentClient = async { attachmentClient() }
+    val clamAvClient = async { clamAvClient() }
     val dataSource = async { dataSource(config.database) }
     val database = async { database(config.database, dataSource.await()) }
 
@@ -56,7 +62,8 @@ suspend fun ResourceScope.dependencies(): Dependencies = awaitAll {
         ediAdapterClient.await(),
         kafkaPublisher.await(),
         attachmentClient.await(),
-        database.await()
+        database.await(),
+        clamAvClient.await()
     )
 }
 
@@ -69,6 +76,19 @@ internal suspend fun ResourceScope.attachmentClient(): AttachmentClient =
     install({ HttpAttachmentClient() }) { p, _: ExitCase ->
         p.close().also { log.info { "Closed attachment client" } }
     }
+
+internal suspend fun ResourceScope.clamAvClient(): ClamAvClient {
+    val httpClient = install({
+        HttpClient(CIO) {
+            install(HttpTimeout) {
+                requestTimeoutMillis = 30_000
+            }
+        }
+    }) { client, _: ExitCase ->
+        client.close().also { log.info { "Closed ClamAV HTTP client" } }
+    }
+    return ClamAvClient(httpClient)
+}
 
 internal suspend fun ResourceScope.dataSource(config: DatabaseConfig): HikariDataSource =
     install({ HikariDataSource(config.toHikariConfig()) }) { h, _: ExitCase ->

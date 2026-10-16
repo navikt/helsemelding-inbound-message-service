@@ -14,8 +14,10 @@ import no.nav.helsemelding.ediadapter.model.Metadata
 import no.nav.helsemelding.inbound.FakeAttachmentService
 import no.nav.helsemelding.inbound.FakeMessagePublisher
 import no.nav.helsemelding.inbound.FakeMessageRepository
+import no.nav.helsemelding.inbound.FakeValidationService
 import no.nav.helsemelding.inbound.metrics.FakeMetrics
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
+import no.nav.helsemelding.inbound.persistence.model.ValidationResult
 import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
@@ -32,6 +34,7 @@ class PollerServiceSpec : StringSpec(
         lateinit var attachmentService: FakeAttachmentService
         lateinit var messageConverter: MsgHeadMessageConverter
         lateinit var messageRepository: FakeMessageRepository
+        lateinit var validationService: FakeValidationService
 
         beforeEach {
             ediAdapterClient = FakeEdiAdapterClient()
@@ -39,13 +42,15 @@ class PollerServiceSpec : StringSpec(
             attachmentService = FakeAttachmentService()
             messageConverter = MsgHeadMessageConverter()
             messageRepository = FakeMessageRepository()
+            validationService = FakeValidationService()
             pollerService = PollerService(
                 ediAdapterClient,
                 publisher,
                 attachmentService,
                 messageConverter,
                 FakeMetrics(),
-                messageRepository
+                messageRepository,
+                validationService
             )
         }
 
@@ -62,6 +67,7 @@ class PollerServiceSpec : StringSpec(
             messageRepository.findByExternalMessageId(externalMessageId) shouldBe null
             publisher.publishedPayload shouldBe null
             attachmentService.saveAttachmentsCallCount shouldBe 0
+            validationService.validatedMessage shouldBe null
         }
 
         "Incoming message should be processed" {
@@ -104,6 +110,7 @@ class PollerServiceSpec : StringSpec(
 
             pollerService.processMessage(message) shouldBe true
 
+            validationService.validatedMessage shouldBe messageConverter.splitAttachments(xml).shouldBeRight()
             publisher.publishedKey shouldBe xmlMessageId.toString()
             String(publisher.publishedPayload!!) shouldBe messageConverter.expectedPayload(xml)
             publisher.publishedAttachmentCount shouldBe 0
@@ -152,6 +159,7 @@ class PollerServiceSpec : StringSpec(
 
             pollerService.processMessage(message) shouldBe true
 
+            validationService.validatedMessage shouldBe messageConverter.splitAttachments(xml).shouldBeRight()
             attachmentService.saveAttachmentsCallCount shouldBe 1
             attachmentService.savedMessageId shouldBe xmlMessageId
 
@@ -288,6 +296,38 @@ class PollerServiceSpec : StringSpec(
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
             result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
+        }
+
+        "Incoming message should not be processed if validation fails" {
+            val externalMessageId = Uuid.random()
+            val xml = readFileToString("message_with_attachments.xml")
+            val encoded = Base64.getEncoder().encodeToString(xml.toByteArray())
+
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                Right(
+                    GetBusinessDocumentResponse(
+                        businessDocument = encoded,
+                        contentType = "application/xml",
+                        contentTransferEncoding = "base64"
+                    )
+                )
+            )
+            validationService.givenValidationResult(ValidationResult.VIRUS_DETECTED)
+
+            val message = Message(
+                id = externalMessageId,
+                isAppRec = false,
+                receiverHerId = FAGSYSTEM_HER_ID
+            )
+
+            pollerService.processMessage(message) shouldBe false
+
+            validationService.validatedMessage shouldBe messageConverter.splitAttachments(xml).shouldBeRight()
+            attachmentService.saveAttachmentsCallCount shouldBe 0
+            publisher.publishedPayload shouldBe null
+
+            val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
+            result shouldBe ProcessingResult.VIRUS_DETECTED
         }
 
         "Incoming message should not be processed if saving attachments fails" {

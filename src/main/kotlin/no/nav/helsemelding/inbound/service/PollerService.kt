@@ -20,6 +20,7 @@ import no.nav.helsemelding.inbound.metrics.ErrorTypeTag
 import no.nav.helsemelding.inbound.metrics.Metrics
 import no.nav.helsemelding.inbound.model.Attachment
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
+import no.nav.helsemelding.inbound.persistence.model.ValidationResult
 import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.registerDuration
@@ -39,7 +40,8 @@ class PollerService(
     private val attachmentService: AttachmentService,
     private val messageConverter: MsgHeadMessageConverter,
     private val metrics: Metrics,
-    private val messageRepository: MessageRepository
+    private val messageRepository: MessageRepository,
+    private val validationService: ValidationService
 ) {
     private val pollerConfig = config().poller
 
@@ -126,6 +128,13 @@ class PollerService(
                 metrics.registerIncomingMessageFailed(ErrorTypeTag.SPLITTING_MESSAGE_FAILED)
                 return ProcessingResult.SPLITTING_MESSAGE_FAILED
             }
+
+        val validationResult = validationService.validate(splitMessage, messageId)
+        if (validationResult != ValidationResult.OK) {
+            log.error { "Validation failed for message $messageId: $validationResult" }
+            metrics.registerIncomingMessageFailed(requireNotNull(validationResult.errorTypeTag))
+            return requireNotNull(validationResult.processingResult)
+        }
 
         if (!splitMessage.attachments.isEmpty()) {
             attachmentService

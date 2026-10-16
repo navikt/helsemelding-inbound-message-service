@@ -17,6 +17,7 @@ import no.nav.helsemelding.inbound.plugin.configureMetrics
 import no.nav.helsemelding.inbound.plugin.configureRoutes
 import no.nav.helsemelding.inbound.publisher.DialogMessagePublisher
 import no.nav.helsemelding.inbound.service.AttachmentStorageService
+import no.nav.helsemelding.inbound.service.MessageValidationService
 import no.nav.helsemelding.inbound.service.PollerService
 import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 
@@ -45,7 +46,8 @@ fun main() = SuspendApp {
                 attachmentService,
                 messageConverter,
                 metrics,
-                ExposedMessageRepository(deps.database)
+                ExposedMessageRepository(deps.database),
+                MessageValidationService(deps.clamAvClient)
             )
 
             scheduleProcessMessages(poller)
