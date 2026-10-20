@@ -30,8 +30,7 @@ attachments skip scanning. `VIRUS_DETECTED` and `VIRUS_SCAN_FAILED` stop process
 Kafka publication, download marking and AppRec. The failure is persisted and counted once, then the notification 
 is deleted.
 
-AppRec is currently sent immediately after publication. It should eventually be sent after feedback
-from fagsystem.
+AppRec is currently sent immediately after publication.
 
 For `REFUSED_MESSAGE`, inbound logs a warning with the notification ID and optional EDI message ID,
 then deletes the notification. Nothing is persisted. Refused documents are unavailable for download,
