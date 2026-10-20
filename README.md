@@ -10,10 +10,10 @@ Consumption is sequential and cancelled before the EDI Adapter client is closed.
 
 The services share notification ownership:
 
-| Notification type | Owner |
+| Owner | Notification type |
 |---|---|
-| `NEW_MESSAGE`, `REFUSED_MESSAGE` | inbound-message-service |
-| `MESSAGE_SENT_STATE_UPDATED`, `MESSAGE_APPREC_INFO_UPDATED`, `MESSAGE_DELIVERY_STATE_UPDATED` | outbound-message-service |
+| inbound-message-service | `NEW_MESSAGE`, `REFUSED_MESSAGE` |
+| outbound-message-service | `MESSAGE_SENT_STATE_UPDATED`, `MESSAGE_APPREC_INFO_UPDATED`, `MESSAGE_DELIVERY_STATE_UPDATED` |
 
 For `NEW_MESSAGE`, inbound:
 
