@@ -21,7 +21,7 @@ For `NEW_MESSAGE`, inbound:
 2. Extracts the XML message ID and attachments.
 3. Validates the split message through `ValidationService` before saving attachments or publishing.
 4. Saves attachments (if any) using the XML message ID.
-5. Publishes XML without attachments to Kafka, keyed by the XML message ID and including the attachment count.
+5. Publishes XML without attachments to Kafka, keyed by the XML message ID and including the attachment count as Kafka header.
 6. Marks the EDI message as downloaded and sends an AppRec.
 7. Persists the processing result before deleting the notification.
 
