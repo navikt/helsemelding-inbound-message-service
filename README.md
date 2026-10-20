@@ -19,16 +19,16 @@ For `NEW_MESSAGE`, inbound:
 
 1. Fetches and decodes the Base64 XML business document.
 2. Extracts the XML message ID and attachments.
-3. Validates the split message through `ValidationService` before saving attachments or publishing.
+3. Validates the split message through `ValidationService`.
 4. Saves attachments (if any) using the XML message ID.
 5. Publishes XML without attachments to Kafka, keyed by the XML message ID and including the attachment count as Kafka header.
 6. Marks the EDI message as downloaded and sends an AppRec.
 7. Persists the processing result before deleting the notification.
 
-`NotificationService` receives a `ValidationService`. In production, `MessageValidationService` uses
-`ClamAvClient` to scan attachments; messages without attachments skip scanning. `VIRUS_DETECTED` and
-`VIRUS_SCAN_FAILED` stop processing before attachment storage, Kafka publication, download marking and
-AppRec. The failure is persisted and counted once, then the notification is deleted.
+In production, `MessageValidationService` uses `ClamAvClient` to scan attachments; messages without 
+attachments skip scanning. `VIRUS_DETECTED` and `VIRUS_SCAN_FAILED` stop processing before attachment storage, 
+Kafka publication, download marking and AppRec. The failure is persisted and counted once, then the notification 
+is deleted.
 
 AppRec is currently sent immediately after publication. It should eventually be sent after feedback
 from fagsystem.
