@@ -2,6 +2,7 @@ package no.nav.helsemelding.inbound.persistence.model
 
 enum class ProcessingResult {
     SUCCESS,
+    IGNORED_APPREC,
     RETRIEVING_BUSINESS_DOCUMENT_FAILED,
     SPLITTING_MESSAGE_FAILED,
     SAVING_ATTACHMENTS_FAILED,

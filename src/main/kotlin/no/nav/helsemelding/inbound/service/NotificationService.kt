@@ -4,6 +4,7 @@ import arrow.core.Either
 import arrow.core.flatMap
 import arrow.core.getOrElse
 import arrow.core.raise.either
+import arrow.core.raise.ensure
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.opentelemetry.api.GlobalOpenTelemetry
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +28,7 @@ import no.nav.helsemelding.inbound.model.Attachment
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.DECODING_BUSINESS_DOCUMENT_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
+import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.IGNORED_APPREC
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.MARKING_MESSAGE_AS_DOWNLOADED_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
@@ -40,7 +42,10 @@ import no.nav.helsemelding.inbound.util.registerDuration
 import no.nav.helsemelding.inbound.util.withSpan
 import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 import no.nav.helsemelding.messageconverter.model.SplitMessage
+import org.xml.sax.InputSource
+import java.io.StringReader
 import java.util.Base64
+import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 import no.nav.helsemelding.messageconverter.model.Attachment as ConverterAttachment
@@ -89,15 +94,23 @@ class NotificationService(
 
         tracer.withSpan("Process incoming message") {
             registerDuration(metrics::registerIncomingMessageProcessingDuration) {
-                val receivedAt = Clock.System.now()
-                metrics.registerIncomingMessageReceived()
-                val result = processNewMessage(externalMessageId, notification.notificationReceiverHerId)
-                messageRepository.save(externalMessageId, receivedAt, result)
-                if (result != SUCCESS) {
-                    metrics.registerIncomingMessageFailed(ErrorTypeTag.valueOf(result.name))
-                    log.error { "Failed processing message $externalMessageId: $result" }
-                }
+                processAndRecordMessage(
+                    externalMessageId,
+                    notification.notificationReceiverHerId
+                )
             }
+        }
+    }
+
+    private suspend fun processAndRecordMessage(externalMessageId: Uuid, receiverHerId: Int) {
+        val receivedAt = Clock.System.now()
+        val result = processNewMessage(externalMessageId, receiverHerId)
+        if (result == IGNORED_APPREC) return
+        metrics.registerIncomingMessageReceived()
+        messageRepository.save(externalMessageId, receivedAt, result)
+        if (result != SUCCESS) {
+            metrics.registerIncomingMessageFailed(ErrorTypeTag.valueOf(result.name))
+            log.error { "Failed processing message $externalMessageId: $result" }
         }
     }
 
@@ -109,7 +122,9 @@ class NotificationService(
         externalMessageId: Uuid,
         receiverHerId: Int
     ): ProcessingResult = either {
-        prepareAndPublishMessage(externalMessageId).bind()
+        val xml = fetchBusinessDocument(externalMessageId).bind()
+        ensure(isNotApprec(xml)) { IGNORED_APPREC }
+        prepareAndPublishMessage(externalMessageId, xml).bind()
         markMessageAsDownloaded(externalMessageId, receiverHerId).bind()
         sendAppRec(externalMessageId, receiverHerId).bind()
         log.info { "Successfully processed incoming message $externalMessageId" }
@@ -117,20 +132,31 @@ class NotificationService(
     }
         .getOrElse { it }
 
-    private suspend fun prepareAndPublishMessage(externalMessageId: Uuid): Either<ProcessingResult, Unit> = either {
-        val xml = fetchBusinessDocument(externalMessageId).bind()
-        val messageId = extractMessageId(externalMessageId, xml).bind()
-        val splitMessage = splitAttachments(externalMessageId, xml).bind()
-
-        val validationResult = validationService.validate(splitMessage, messageId)
-        validationResult.processingResult?.let { failure ->
-            log.error { "Validation failed for message $messageId: $validationResult" }
-            raise(failure)
+    // TODO This should be moved to the message converter as a public API function
+    private fun isNotApprec(xml: String): Boolean = Either.catch {
+        val factory = DocumentBuilderFactory.newInstance().apply {
+            isNamespaceAware = true
+            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
         }
-
-        saveAttachments(messageId, splitMessage.attachments).bind()
-        publishMessage(messageId, splitMessage).bind()
+        val document = factory.newDocumentBuilder().parse(InputSource(StringReader(xml)))
+        document.documentElement.localName != "AppRec"
     }
+        .getOrElse { true } // Invalid XML is reported by the MsgHead converter.
+
+    private suspend fun prepareAndPublishMessage(externalMessageId: Uuid, xml: String): Either<ProcessingResult, Unit> =
+        either {
+            val messageId = extractMessageId(externalMessageId, xml).bind()
+            val splitMessage = splitAttachments(externalMessageId, xml).bind()
+
+            val validationResult = validationService.validate(splitMessage, messageId)
+            validationResult.processingResult?.let { failure ->
+                log.error { "Validation failed for message $messageId: $validationResult" }
+                raise(failure)
+            }
+
+            saveAttachments(messageId, splitMessage.attachments).bind()
+            publishMessage(messageId, splitMessage).bind()
+        }
 
     private suspend fun fetchBusinessDocument(externalMessageId: Uuid): Either<ProcessingResult, String> =
         ediAdapterClient.getBusinessDocument(externalMessageId)
