@@ -64,7 +64,7 @@ class NotificationService(
         return ediAdapterClient.streamUnreadNotifications(herId)
             .onEach { result ->
                 result
-                    .onLeft { throw NotificationProcessingException("Notification stream failed for herId: $herId: $it") }
+                    .onLeft { throw NotificationProcessingException("Notification stream failed for herId $herId: $it") }
                     .onRight { processNotification(it) }
             }
             .flowOn(Dispatchers.IO)
