@@ -106,8 +106,20 @@ class NotificationServiceSpec : StringSpec(
             val registry = SimpleMeterRegistry()
             val service = createNotificationService(metrics = CustomMetrics(registry))
             val documents = listOf(
-                """<AppRec xmlns="http://www.kith.no/xmlstds/apprec/2004-11-21"/>""",
-                """<?xml version="1.0"?><!-- AppRec --><a:AppRec xmlns:a="http://www.kith.no/xmlstds/apprec/2004-11-21"/>"""
+                """
+                <AppRec xmlns="http://www.kith.no/xmlstds/apprec/2004-11-21">
+                    <MsgType V="APPREC" DN="Applikasjonskvittering"/>
+                </AppRec>
+                """
+                    .trimIndent(),
+                """
+                <?xml version="1.0"?>
+                <!-- AppRec -->
+                <a:AppRec xmlns:a="http://www.kith.no/xmlstds/apprec/2004-11-21">
+                    <a:MsgType V="APPREC" DN="Applikasjonskvittering"/>
+                </a:AppRec>
+                """
+                    .trimIndent()
             )
             for (xml in documents) {
                 ediAdapterClient.givenGetBusinessDocumentResponse(
@@ -115,7 +127,8 @@ class NotificationServiceSpec : StringSpec(
                         Base64.getEncoder().encodeToString(xml.toByteArray()),
                         "application/xml",
                         "base64"
-                    ).right()
+                    )
+                        .right()
                 )
                 val message = notification(Uuid.random())
 
@@ -134,14 +147,21 @@ class NotificationServiceSpec : StringSpec(
         }
 
         "MsgHead containing an AppRec is not mistaken for a standalone AppRec" {
+            val apprec = """
+                <AppRec xmlns="http://www.kith.no/xmlstds/apprec/2004-11-21">
+                    <MsgType V="APPREC" DN="Applikasjonskvittering"/>
+                </AppRec>
+            """
+                .trimIndent()
             val xml = readFileToString("message/incomingDialogMessage.xml")
-                .replace("</Content>", """<AppRec xmlns="http://www.kith.no/xmlstds/apprec/2004-11-21"/></Content>""")
+                .replace("</Content>", "$apprec</Content>")
             ediAdapterClient.givenGetBusinessDocumentResponse(
                 GetBusinessDocumentResponse(
                     Base64.getEncoder().encodeToString(xml.toByteArray()),
                     "application/xml",
                     "base64"
-                ).right()
+                )
+                    .right()
             )
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
             val message = notification(Uuid.random())
