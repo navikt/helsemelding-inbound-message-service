@@ -8,7 +8,6 @@ import io.kotest.matchers.shouldNotBe
 import no.nav.helsemelding.inbound.container
 import no.nav.helsemelding.inbound.database
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
-import no.nav.helsemelding.inbound.persistence.model.RefusedMessage
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
@@ -100,25 +99,6 @@ class MessageRepositorySpec : StringSpec(
                 repository.findByExternalMessageId(id)!!.result shouldBe ProcessingResult.SENDING_APPREC_FAILED
                 suspendTransaction(database) {
                     ProcessedMessages.selectAll().where { ProcessedMessages.externalMessageId eq id }.count() shouldBe 1L
-                }
-            }
-        }
-
-        "refusal persistence is idempotent and supports missing external message ID" {
-            resourceScope {
-                val database = database(postgresContainer.jdbcUrl)
-                val repository = ExposedMessageRepository(database)
-                for (externalId in listOf(null, Uuid.random())) {
-                    val refused = RefusedMessage(Uuid.random(), externalId, 8142519, "Refused document", Clock.System.now())
-                    repository.saveRefusedMessage(refused)
-                    repository.saveRefusedMessage(refused)
-                    suspendTransaction(database) {
-                        val rows = RefusedMessages.selectAll().where { RefusedMessages.notificationId eq refused.notificationId }.toList()
-                        rows.size shouldBe 1
-                        rows.single()[RefusedMessages.externalMessageId] shouldBe externalId
-                        rows.single()[RefusedMessages.receiverHerId] shouldBe refused.receiverHerId
-                        rows.single()[RefusedMessages.description] shouldBe refused.description
-                    }
                 }
             }
         }

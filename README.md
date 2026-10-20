@@ -33,9 +33,9 @@ AppRec. The failure is persisted and counted once, then the notification is dele
 AppRec is currently sent immediately after publication. It should eventually be sent after feedback
 from fagsystem.
 
-For `REFUSED_MESSAGE`, inbound persists the notification ID, optional EDI message ID, receiver HER ID,
-description and timestamp in `refused_messages`, then deletes the notification. Refused documents are
-unavailable for download, so this path does not fetch a document or publish XML.
+For `REFUSED_MESSAGE`, inbound logs a warning with the notification ID and optional EDI message ID,
+then deletes the notification. Nothing is persisted. Refused documents are unavailable for download,
+so this path does not fetch a document or publish XML.
 
 Processing failures are logged, counted and persisted before the notification is deleted. Consumption
 continues with the next notification; failed messages are not retried. Each EDI message has one processing
@@ -44,8 +44,7 @@ are deleted without processing the message again, regardless of the stored resul
 
 New-message notifications without a related message ID are logged, counted and deleted. Database failures
 prevent deletion because the result could not be recorded. Deletion failures are logged without stopping
-consumption. The client reconnects the notification stream on transport failures. Refusal persistence is
-idempotent by notification ID.
+consumption. The client reconnects the notification stream on transport failures.
 
 Delivery remains at least once: a crash between Kafka publication and recording the processing result
 can cause a duplicate publication. Kafka consumers must tolerate this.

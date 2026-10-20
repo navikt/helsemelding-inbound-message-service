@@ -34,7 +34,6 @@ import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.SAVING_ATT
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.SENDING_APPREC_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.SPLITTING_MESSAGE_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.SUCCESS
-import no.nav.helsemelding.inbound.persistence.model.RefusedMessage
 import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.registerDuration
@@ -102,16 +101,7 @@ class NotificationService(
         }
     }
 
-    private suspend fun processRefusedMessageNotification(notification: UnreadNotification) {
-        messageRepository.saveRefusedMessage(
-            RefusedMessage(
-                notificationId = notification.notificationId,
-                externalMessageId = notification.relatedMessageId,
-                receiverHerId = notification.notificationReceiverHerId,
-                description = notification.description,
-                receivedAt = notification.createdAt ?: Clock.System.now()
-            )
-        )
+    private fun processRefusedMessageNotification(notification: UnreadNotification) {
         log.warn { "Incoming message refused: notificationId=${notification.notificationId} messageId=${notification.relatedMessageId}" }
     }
 
