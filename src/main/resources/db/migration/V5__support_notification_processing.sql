@@ -1,6 +1,3 @@
-DROP INDEX idx_processed_messages_external_message_id;
-CREATE INDEX idx_processed_messages_external_message_id ON processed_messages(external_message_id);
-
 UPDATE processed_messages
 SET result = 'MARKING_MESSAGE_AS_DOWNLOADED_FAILED'
 WHERE result = 'MARKING_MESSAGE_AS_READ_FAILED';

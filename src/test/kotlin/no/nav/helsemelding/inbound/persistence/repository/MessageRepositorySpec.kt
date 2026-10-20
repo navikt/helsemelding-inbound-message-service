@@ -1,6 +1,7 @@
 package no.nav.helsemelding.inbound.persistence.repository
 
 import arrow.fx.coroutines.resourceScope
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -11,6 +12,7 @@ import no.nav.helsemelding.inbound.persistence.model.RefusedMessage
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
+import java.sql.SQLException
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -85,16 +87,19 @@ class MessageRepositorySpec : StringSpec(
             }
         }
 
-        "processing retries preserve history and return the latest attempt" {
+        "external message ID remains unique and the original result is preserved" {
             resourceScope {
                 val database = database(postgresContainer.jdbcUrl)
                 val repository = ExposedMessageRepository(database)
                 val id = Uuid.random()
                 repository.save(id, Clock.System.now(), ProcessingResult.SENDING_APPREC_FAILED)
-                repository.save(id, Clock.System.now(), ProcessingResult.SUCCESS)
-                repository.findByExternalMessageId(id)!!.result shouldBe ProcessingResult.SUCCESS
+                val failure = shouldThrow<SQLException> {
+                    repository.save(id, Clock.System.now(), ProcessingResult.SUCCESS)
+                }
+                failure.sqlState shouldBe "23505"
+                repository.findByExternalMessageId(id)!!.result shouldBe ProcessingResult.SENDING_APPREC_FAILED
                 suspendTransaction(database) {
-                    ProcessedMessages.selectAll().where { ProcessedMessages.externalMessageId eq id }.count() shouldBe 2L
+                    ProcessedMessages.selectAll().where { ProcessedMessages.externalMessageId eq id }.count() shouldBe 1L
                 }
             }
         }

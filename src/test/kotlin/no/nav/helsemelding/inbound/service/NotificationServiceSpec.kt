@@ -9,6 +9,7 @@ import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
@@ -26,6 +27,7 @@ import no.nav.helsemelding.inbound.FakeEdiAdapterClient
 import no.nav.helsemelding.inbound.FakeMessagePublisher
 import no.nav.helsemelding.inbound.FakeMessageRepository
 import no.nav.helsemelding.inbound.config
+import no.nav.helsemelding.inbound.metrics.CustomMetrics
 import no.nav.helsemelding.inbound.metrics.FakeMetrics
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.persistence.model.RefusedMessage
@@ -216,8 +218,8 @@ class NotificationServiceSpec : StringSpec(
                 notificationReceiverHerId = FAGSYSTEM_HER_ID
             )
 
-            shouldThrow<NotificationProcessingException> { notificationService.processNotification(message) }
-            ediAdapterClient.deleteRequests shouldBe emptyList()
+            notificationService.processNotification(message)
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
             result shouldBe ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
@@ -247,8 +249,8 @@ class NotificationServiceSpec : StringSpec(
                 notificationReceiverHerId = FAGSYSTEM_HER_ID
             )
 
-            shouldThrow<NotificationProcessingException> { notificationService.processNotification(message) }
-            ediAdapterClient.deleteRequests shouldBe emptyList()
+            notificationService.processNotification(message)
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
             result shouldBe ProcessingResult.SPLITTING_MESSAGE_FAILED
@@ -277,8 +279,8 @@ class NotificationServiceSpec : StringSpec(
                 notificationReceiverHerId = FAGSYSTEM_HER_ID
             )
 
-            shouldThrow<NotificationProcessingException> { notificationService.processNotification(message) }
-            ediAdapterClient.deleteRequests shouldBe emptyList()
+            notificationService.processNotification(message)
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
             result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
@@ -308,8 +310,8 @@ class NotificationServiceSpec : StringSpec(
                 notificationReceiverHerId = FAGSYSTEM_HER_ID
             )
 
-            shouldThrow<NotificationProcessingException> { notificationService.processNotification(message) }
-            ediAdapterClient.deleteRequests shouldBe emptyList()
+            notificationService.processNotification(message)
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
             result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
@@ -342,8 +344,8 @@ class NotificationServiceSpec : StringSpec(
                 notificationReceiverHerId = FAGSYSTEM_HER_ID
             )
 
-            shouldThrow<NotificationProcessingException> { notificationService.processNotification(message) }
-            ediAdapterClient.deleteRequests shouldBe emptyList()
+            notificationService.processNotification(message)
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
             result shouldBe ProcessingResult.SAVING_ATTACHMENTS_FAILED
@@ -378,8 +380,8 @@ class NotificationServiceSpec : StringSpec(
                 notificationReceiverHerId = FAGSYSTEM_HER_ID
             )
 
-            shouldThrow<NotificationProcessingException> { notificationService.processNotification(message) }
-            ediAdapterClient.deleteRequests shouldBe emptyList()
+            notificationService.processNotification(message)
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
             result shouldBe ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
@@ -417,8 +419,8 @@ class NotificationServiceSpec : StringSpec(
                 notificationReceiverHerId = FAGSYSTEM_HER_ID
             )
 
-            shouldThrow<NotificationProcessingException> { notificationService.processNotification(message) }
-            ediAdapterClient.deleteRequests shouldBe emptyList()
+            notificationService.processNotification(message)
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
             result shouldBe ProcessingResult.MARKING_MESSAGE_AS_DOWNLOADED_FAILED
@@ -459,8 +461,8 @@ class NotificationServiceSpec : StringSpec(
                 notificationReceiverHerId = FAGSYSTEM_HER_ID
             )
 
-            shouldThrow<NotificationProcessingException> { notificationService.processNotification(message) }
-            ediAdapterClient.deleteRequests shouldBe emptyList()
+            notificationService.processNotification(message)
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
             result shouldBe ProcessingResult.SENDING_APPREC_FAILED
@@ -493,11 +495,13 @@ class NotificationServiceSpec : StringSpec(
             publisher.publishCount shouldBe 0
         }
 
-        "missing related ID on a new message leaves the notification undeleted" {
-            shouldThrow<NotificationProcessingException> {
-                notificationService.processNotification(notification(null))
-            }
-            ediAdapterClient.deleteRequests shouldBe emptyList()
+        "missing related ID is counted and the notification is deleted" {
+            val registry = SimpleMeterRegistry()
+            val service = NotificationService(ediAdapterClient, publisher, attachmentService, messageConverter, CustomMetrics(registry), messageRepository)
+            val message = notification(null)
+            service.processNotification(message)
+            registry.get("helsemelding_incoming_messages_failed").tag("error_type", "missing_external_message_id").counter().count() shouldBe 1.0
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
             ediAdapterClient.documentRequests shouldBe emptyList()
         }
 
@@ -531,40 +535,38 @@ class NotificationServiceSpec : StringSpec(
             ediAdapterClient.deleteRequests.size shouldBe 2
         }
 
-        "retry after download failure does not republish" {
-            givenSuccessfulDocument()
-            val message = notification(Uuid.random())
-            ediAdapterClient.givenMarkAsDownloaded(EdiAdapterError.Api(503).left())
-            shouldThrow<NotificationProcessingException> { notificationService.processNotification(message) }
-            ediAdapterClient.deleteRequests shouldBe emptyList()
-            ediAdapterClient.givenMarkAsDownloaded(Unit.right())
-            notificationService.processNotification(message)
-            publisher.publishCount shouldBe 1
-            ediAdapterClient.documentRequests.size shouldBe 1
-            ediAdapterClient.downloadedRequests.size shouldBe 2
-            ediAdapterClient.apprecRequests.size shouldBe 1
-            messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!.result shouldBe ProcessingResult.SUCCESS
+        "registered failures are never reprocessed when their notification is redelivered" {
+            for (result in ProcessingResult.entries.filter { it != ProcessingResult.SUCCESS }) {
+                val message = notification(Uuid.random())
+                messageRepository.save(message.relatedMessageId!!, kotlin.time.Clock.System.now(), result)
+                notificationService.processNotification(message)
+                messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!.result shouldBe result
+            }
+            ediAdapterClient.documentRequests shouldBe emptyList()
+            ediAdapterClient.downloadedRequests shouldBe emptyList()
+            ediAdapterClient.apprecRequests shouldBe emptyList()
+            publisher.publishCount shouldBe 0
+            ediAdapterClient.deleteRequests.size shouldBe ProcessingResult.entries.size - 1
         }
 
-        "retry after AppRec failure only retries AppRec" {
-            givenSuccessfulDocument()
+        "a failed message is persisted and counted before deletion" {
+            val registry = SimpleMeterRegistry()
+            val service = NotificationService(ediAdapterClient, publisher, attachmentService, messageConverter, CustomMetrics(registry), messageRepository)
             val message = notification(Uuid.random())
-            ediAdapterClient.givenPostApprecResponse(EdiAdapterError.Api(503).left())
-            shouldThrow<NotificationProcessingException> { notificationService.processNotification(message) }
-            ediAdapterClient.deleteRequests shouldBe emptyList()
-            ediAdapterClient.givenPostApprecResponse(PostApprecResponse(Uuid.random()).right())
-            notificationService.processNotification(message)
-            publisher.publishCount shouldBe 1
-            ediAdapterClient.downloadedRequests.size shouldBe 1
-            ediAdapterClient.apprecRequests.size shouldBe 2
+            ediAdapterClient.beforeDelete = {
+                messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!.result shouldBe ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
+                registry.get("helsemelding_incoming_messages_failed").tag("error_type", "retrieving_business_document_failed").counter().count() shouldBe 1.0
+            }
+            service.processNotification(message)
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
         }
 
-        "invalid Base64 is recorded as a failure and leaves the notification undeleted" {
+        "invalid Base64 is recorded as a failure and the notification is deleted" {
             ediAdapterClient.givenGetBusinessDocumentResponse(GetBusinessDocumentResponse("%%%", "application/xml", "base64").right())
             val message = notification(Uuid.random())
-            shouldThrow<NotificationProcessingException> { notificationService.processNotification(message) }
+            notificationService.processNotification(message)
             messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!.result shouldBe ProcessingResult.DECODING_BUSINESS_DOCUMENT_FAILED
-            ediAdapterClient.deleteRequests shouldBe emptyList()
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
             publisher.publishCount shouldBe 0
         }
 
@@ -611,19 +613,24 @@ class NotificationServiceSpec : StringSpec(
             stopped.isCompleted shouldBe true
         }
 
-        "stream handles only incoming types and preserves failed new message" {
+        "stream records failures and continues with the next incoming message" {
             val refused = notification(null, NotificationType.REFUSED_MESSAGE)
-            val newMessage = notification(Uuid.random())
-            ediAdapterClient.notifications = flowOf(
-                notification(Uuid.random(), NotificationType.MESSAGE_APPREC_INFO_UPDATED).right(),
-                refused.right(),
-                newMessage.right()
-            )
-            shouldThrow<NotificationProcessingException> {
-                coroutineScope { notificationService.processNotifications(this).join() }
+            val failedMessage = notification(Uuid.random())
+            val successfulMessage = notification(Uuid.random())
+            ediAdapterClient.notifications = flow {
+                emit(notification(Uuid.random(), NotificationType.MESSAGE_APPREC_INFO_UPDATED).right())
+                emit(refused.right())
+                emit(failedMessage.right())
+                givenSuccessfulDocument()
+                emit(successfulMessage.right())
             }
+            notificationService.processNotifications(this).join()
             ediAdapterClient.notificationRequests shouldBe listOf(listOf(config().ediAdapter.receiverHerId))
-            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(refused.notificationId)
+            ediAdapterClient.deleteRequests.map { it.notificationIds.single() } shouldBe
+                listOf(refused.notificationId, failedMessage.notificationId, successfulMessage.notificationId)
+            messageRepository.findByExternalMessageId(failedMessage.relatedMessageId!!)!!.result shouldBe ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
+            messageRepository.findByExternalMessageId(successfulMessage.relatedMessageId!!)!!.result shouldBe ProcessingResult.SUCCESS
+            publisher.publishCount shouldBe 1
         }
 
         "cancelling consumption closes the notification flow" {

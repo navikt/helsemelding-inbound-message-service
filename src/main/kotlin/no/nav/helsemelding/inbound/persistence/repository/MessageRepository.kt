@@ -4,7 +4,6 @@ import no.nav.helsemelding.inbound.persistence.model.ProcessedMessage
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.persistence.model.RefusedMessage
 import no.nav.helsemelding.inbound.util.UuidTransformer
-import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.datetime.timestamp
@@ -62,8 +61,6 @@ class ExposedMessageRepository(private val database: Database) : MessageReposito
     override suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage? = suspendTransaction(database) {
         ProcessedMessages.selectAll()
             .where { ProcessedMessages.externalMessageId eq externalMessageId }
-            .orderBy(ProcessedMessages.id, SortOrder.DESC)
-            .limit(1)
             .singleOrNull()
             ?.let {
                 ProcessedMessage(

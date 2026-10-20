@@ -31,11 +31,15 @@ For `REFUSED_MESSAGE`, inbound persists the notification ID, optional EDI messag
 description and timestamp in `refused_messages`, then deletes the notification. Refused documents are
 unavailable for download, so this path does not fetch a document or publish XML.
 
-Failed processing leaves the notification undeleted and stops consumption, allowing it to be retried
-after application restart. Transport failures in the stream are reconnected by the client. Deletion
-failures are logged without stopping consumption. Replayed successful messages only retry notification
-deletion; recorded download/AppRec failures resume those steps without republishing to Kafka.
-Refusal persistence is idempotent by notification ID.
+Processing failures are logged, counted and persisted before the notification is deleted. Consumption
+continues with the next notification; failed messages are not retried. Each EDI message has one processing
+result, enforced by a unique index on `external_message_id`. Notifications for already registered messages
+are deleted without processing the message again, regardless of the stored result.
+
+New-message notifications without a related message ID are logged, counted and deleted. Database failures
+prevent deletion because the result could not be recorded. Deletion failures are logged without stopping
+consumption. The client reconnects the notification stream on transport failures. Refusal persistence is
+idempotent by notification ID.
 
 Delivery remains at least once: a crash between Kafka publication and recording the processing result
 can cause a duplicate publication. Kafka consumers must tolerate this.

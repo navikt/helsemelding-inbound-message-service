@@ -81,21 +81,22 @@ class NotificationService(
     }
 
     private suspend fun processNewMessage(notification: UnreadNotification) {
-        val externalMessageId = notification.relatedMessageId
-            ?: throw NotificationProcessingException("New message notification ${notification.notificationId} has no related message ID")
-        val previousResult = messageRepository.findByExternalMessageId(externalMessageId)?.result
-        if (previousResult == SUCCESS) return
+        val externalMessageId = notification.relatedMessageId ?: run {
+            log.error { "New message notification ${notification.notificationId} has no related message ID" }
+            metrics.registerIncomingMessageFailed(ErrorTypeTag.MISSING_EXTERNAL_MESSAGE_ID)
+            return
+        }
+        if (messageRepository.findByExternalMessageId(externalMessageId) != null) return
 
         tracer.withSpan("Process incoming message") {
             registerDuration(metrics::registerIncomingMessageProcessingDuration) {
                 val receivedAt = Clock.System.now()
                 metrics.registerIncomingMessageReceived()
-                val result =
-                    processIncomingMessage(externalMessageId, notification.notificationReceiverHerId, previousResult)
+                val result = processIncomingMessage(externalMessageId, notification.notificationReceiverHerId)
                 messageRepository.save(externalMessageId, receivedAt, result)
                 if (result != SUCCESS) {
                     metrics.registerIncomingMessageFailed(ErrorTypeTag.valueOf(result.name))
-                    throw NotificationProcessingException("Failed processing message $externalMessageId: $result")
+                    log.error { "Failed processing message $externalMessageId: $result" }
                 }
             }
         }
@@ -116,18 +117,10 @@ class NotificationService(
 
     private suspend fun processIncomingMessage(
         externalMessageId: Uuid,
-        receiverHerId: Int,
-        previousResult: ProcessingResult?
+        receiverHerId: Int
     ): ProcessingResult = either {
-        // Resume at the failed step when Kafka publication already succeeded.
-        when (previousResult) {
-            SENDING_APPREC_FAILED -> Unit
-            MARKING_MESSAGE_AS_DOWNLOADED_FAILED -> markMessageAsDownloaded(externalMessageId, receiverHerId).bind()
-            else -> {
-                prepareAndPublishMessage(externalMessageId).bind()
-                markMessageAsDownloaded(externalMessageId, receiverHerId).bind()
-            }
-        }
+        prepareAndPublishMessage(externalMessageId).bind()
+        markMessageAsDownloaded(externalMessageId, receiverHerId).bind()
         sendAppRec(externalMessageId, receiverHerId).bind()
         log.info { "Successfully processed incoming message $externalMessageId" }
         SUCCESS
