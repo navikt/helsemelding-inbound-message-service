@@ -73,14 +73,14 @@ class NotificationService(
 
     internal suspend fun processNotification(notification: UnreadNotification) {
         when (notification.type) {
-            NEW_MESSAGE -> processNewMessage(notification)
-            REFUSED_MESSAGE -> processRefusedMessage(notification)
+            NEW_MESSAGE -> processNewMessageNotification(notification)
+            REFUSED_MESSAGE -> processRefusedMessageNotification(notification)
             else -> return // Status notifications belong to outbound-message-service.
         }
         deleteNotification(notification.notificationId)
     }
 
-    private suspend fun processNewMessage(notification: UnreadNotification) {
+    private suspend fun processNewMessageNotification(notification: UnreadNotification) {
         val externalMessageId = notification.relatedMessageId ?: run {
             log.error { "New message notification ${notification.notificationId} has no related message ID" }
             metrics.registerIncomingMessageFailed(ErrorTypeTag.MISSING_EXTERNAL_MESSAGE_ID)
@@ -92,7 +92,7 @@ class NotificationService(
             registerDuration(metrics::registerIncomingMessageProcessingDuration) {
                 val receivedAt = Clock.System.now()
                 metrics.registerIncomingMessageReceived()
-                val result = processIncomingMessage(externalMessageId, notification.notificationReceiverHerId)
+                val result = processNewMessage(externalMessageId, notification.notificationReceiverHerId)
                 messageRepository.save(externalMessageId, receivedAt, result)
                 if (result != SUCCESS) {
                     metrics.registerIncomingMessageFailed(ErrorTypeTag.valueOf(result.name))
@@ -102,7 +102,7 @@ class NotificationService(
         }
     }
 
-    private suspend fun processRefusedMessage(notification: UnreadNotification) {
+    private suspend fun processRefusedMessageNotification(notification: UnreadNotification) {
         messageRepository.saveRefusedMessage(
             RefusedMessage(
                 notificationId = notification.notificationId,
@@ -115,7 +115,7 @@ class NotificationService(
         log.warn { "Incoming message refused: notificationId=${notification.notificationId} messageId=${notification.relatedMessageId}" }
     }
 
-    private suspend fun processIncomingMessage(
+    private suspend fun processNewMessage(
         externalMessageId: Uuid,
         receiverHerId: Int
     ): ProcessingResult = either {
