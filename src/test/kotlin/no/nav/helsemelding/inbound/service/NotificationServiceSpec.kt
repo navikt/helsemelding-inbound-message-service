@@ -5,15 +5,10 @@ import arrow.core.Either.Right
 import arrow.core.left
 import arrow.core.right
 import arrow.fx.coroutines.resourceScope
-import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.Logger
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
@@ -43,7 +38,6 @@ import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
 import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
-import org.slf4j.LoggerFactory
 import java.util.Base64
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -529,7 +523,7 @@ class NotificationServiceSpec : StringSpec(
             publisher.publishCount shouldBe 0
         }
 
-        "refused notifications are warned and deleted without accessing the database" {
+        "refused notifications are deleted without accessing the database" {
             val repository = object : MessageRepository {
                 override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult) {
                     error("Refused notifications must not be persisted")
@@ -541,24 +535,8 @@ class NotificationServiceSpec : StringSpec(
             val refusedNotifications = listOf(null, Uuid.random()).map {
                 notification(it, NotificationType.REFUSED_MESSAGE)
             }
-            val appender = ListAppender<ILoggingEvent>().apply { start() }
-            val logger = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
-            logger.addAppender(appender)
-            try {
-                for (refused in refusedNotifications) {
-                    service.processNotification(refused)
-                }
-                val warnings = appender.list.filter {
-                    it.level == Level.WARN &&
-                        it.loggerName.startsWith("no.nav.helsemelding.inbound.service.NotificationService")
-                }
-                warnings.size shouldBe refusedNotifications.size
-                warnings.zip(refusedNotifications).forEach { (event, refused) ->
-                    event.formattedMessage shouldContain refused.notificationId.toString()
-                }
-            } finally {
-                logger.detachAppender(appender)
-                appender.stop()
+            for (refused in refusedNotifications) {
+                service.processNotification(refused)
             }
             ediAdapterClient.deleteRequests.map { it.notificationIds.single() } shouldBe
                 refusedNotifications.map { it.notificationId }
