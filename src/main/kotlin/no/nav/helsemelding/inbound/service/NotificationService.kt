@@ -56,7 +56,7 @@ class NotificationService(
     private val messageConverter: MsgHeadMessageConverter,
     private val metrics: Metrics,
     private val messageRepository: MessageRepository,
-    private val validationService: MessageValidationService
+    private val validationService: ValidationService
 ) {
     fun processNotifications(scope: CoroutineScope): Job {
         val herId = config().ediAdapter.receiverHerId

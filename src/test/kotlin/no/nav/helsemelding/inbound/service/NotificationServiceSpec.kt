@@ -26,11 +26,14 @@ import no.nav.helsemelding.inbound.FakeAttachmentService
 import no.nav.helsemelding.inbound.FakeEdiAdapterClient
 import no.nav.helsemelding.inbound.FakeMessagePublisher
 import no.nav.helsemelding.inbound.FakeMessageRepository
+import no.nav.helsemelding.inbound.FakeValidationService
 import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.metrics.CustomMetrics
 import no.nav.helsemelding.inbound.metrics.FakeMetrics
+import no.nav.helsemelding.inbound.metrics.Metrics
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.persistence.model.RefusedMessage
+import no.nav.helsemelding.inbound.persistence.model.ValidationResult
 import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
 import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 import org.apache.kafka.clients.producer.RecordMetadata
@@ -50,6 +53,20 @@ class NotificationServiceSpec : StringSpec(
         lateinit var attachmentService: FakeAttachmentService
         lateinit var messageConverter: MsgHeadMessageConverter
         lateinit var messageRepository: FakeMessageRepository
+        lateinit var validationService: FakeValidationService
+
+        fun createNotificationService(
+            metrics: Metrics = FakeMetrics(),
+            repository: MessageRepository = messageRepository
+        ): NotificationService = NotificationService(
+            ediAdapterClient,
+            publisher,
+            attachmentService,
+            messageConverter,
+            metrics,
+            repository,
+            validationService
+        )
 
         beforeEach {
             ediAdapterClient = FakeEdiAdapterClient()
@@ -57,14 +74,8 @@ class NotificationServiceSpec : StringSpec(
             attachmentService = FakeAttachmentService()
             messageConverter = MsgHeadMessageConverter()
             messageRepository = FakeMessageRepository()
-            notificationService = NotificationService(
-                ediAdapterClient,
-                publisher,
-                attachmentService,
-                messageConverter,
-                FakeMetrics(),
-                messageRepository
-            )
+            validationService = FakeValidationService()
+            notificationService = createNotificationService()
         }
 
         fun givenSuccessfulDocument() {
@@ -131,6 +142,7 @@ class NotificationServiceSpec : StringSpec(
 
             publisher.publishedKey shouldBe xmlMessageId.toString()
             String(publisher.publishedPayload!!) shouldBe messageConverter.expectedPayload(xml)
+            validationService.validatedMessage shouldBe messageConverter.splitAttachments(xml).shouldBeRight()
             publisher.publishedAttachmentCount shouldBe 0
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
@@ -175,6 +187,7 @@ class NotificationServiceSpec : StringSpec(
 
             notificationService.processNotification(message)
 
+            validationService.validatedMessage shouldBe messageConverter.splitAttachments(xml).shouldBeRight()
             attachmentService.saveAttachmentsCallCount shouldBe 1
             attachmentService.savedMessageId shouldBe xmlMessageId
 
@@ -315,6 +328,40 @@ class NotificationServiceSpec : StringSpec(
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
             result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
+        }
+
+        for ((validationResult, expectedResult, errorTag) in listOf(
+            Triple(ValidationResult.VIRUS_DETECTED, ProcessingResult.VIRUS_DETECTED, "validating_virus_detected"),
+            Triple(ValidationResult.VIRUS_SCAN_FAILED, ProcessingResult.VIRUS_SCAN_FAILED, "validating_virus_scan_failed")
+        )) {
+            "$validationResult is recorded once and prevents attachment storage and publication" {
+                val xml = readFileToString("message_with_attachments.xml")
+                ediAdapterClient.givenGetBusinessDocumentResponse(
+                    GetBusinessDocumentResponse(
+                        Base64.getEncoder().encodeToString(xml.toByteArray()),
+                        "application/xml",
+                        "base64"
+                    ).right()
+                )
+                validationService.givenValidationResult(validationResult)
+                val registry = SimpleMeterRegistry()
+                val service = createNotificationService(metrics = CustomMetrics(registry))
+                val message = notification(Uuid.random())
+                ediAdapterClient.beforeDelete = {
+                    messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!.result shouldBe expectedResult
+                    registry.get("helsemelding_incoming_messages_failed")
+                        .tag("error_type", errorTag).counter().count() shouldBe 1.0
+                }
+
+                service.processNotification(message)
+
+                validationService.validatedMessage shouldBe messageConverter.splitAttachments(xml).shouldBeRight()
+                attachmentService.saveAttachmentsCallCount shouldBe 0
+                publisher.publishCount shouldBe 0
+                ediAdapterClient.downloadedRequests shouldBe emptyList()
+                ediAdapterClient.apprecRequests shouldBe emptyList()
+                ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
+            }
         }
 
         "Incoming message should not be processed if saving attachments fails" {
@@ -497,7 +544,7 @@ class NotificationServiceSpec : StringSpec(
 
         "missing related ID is counted and the notification is deleted" {
             val registry = SimpleMeterRegistry()
-            val service = NotificationService(ediAdapterClient, publisher, attachmentService, messageConverter, CustomMetrics(registry), messageRepository)
+            val service = createNotificationService(metrics = CustomMetrics(registry))
             val message = notification(null)
             service.processNotification(message)
             registry.get("helsemelding_incoming_messages_failed").tag("error_type", "missing_external_message_id").counter().count() shouldBe 1.0
@@ -551,7 +598,7 @@ class NotificationServiceSpec : StringSpec(
 
         "a failed message is persisted and counted before deletion" {
             val registry = SimpleMeterRegistry()
-            val service = NotificationService(ediAdapterClient, publisher, attachmentService, messageConverter, CustomMetrics(registry), messageRepository)
+            val service = createNotificationService(metrics = CustomMetrics(registry))
             val message = notification(Uuid.random())
             ediAdapterClient.beforeDelete = {
                 messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!.result shouldBe ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
@@ -576,7 +623,7 @@ class NotificationServiceSpec : StringSpec(
             val repository = object : MessageRepository by messageRepository {
                 override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult) { throw failure }
             }
-            val service = NotificationService(ediAdapterClient, publisher, attachmentService, messageConverter, FakeMetrics(), repository)
+            val service = createNotificationService(repository = repository)
             shouldThrow<IllegalStateException> { service.processNotification(notification(Uuid.random())) } shouldBe failure
             ediAdapterClient.deleteRequests shouldBe emptyList()
         }
@@ -585,7 +632,7 @@ class NotificationServiceSpec : StringSpec(
             val repository = object : MessageRepository by messageRepository {
                 override suspend fun saveRefusedMessage(message: RefusedMessage) { error("Database unavailable") }
             }
-            val service = NotificationService(ediAdapterClient, publisher, attachmentService, messageConverter, FakeMetrics(), repository)
+            val service = createNotificationService(repository = repository)
             shouldThrow<IllegalStateException> { service.processNotification(notification(null, NotificationType.REFUSED_MESSAGE)) }
             ediAdapterClient.deleteRequests shouldBe emptyList()
         }
