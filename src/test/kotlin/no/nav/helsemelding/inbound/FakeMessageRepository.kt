@@ -11,6 +11,7 @@ class FakeMessageRepository : MessageRepository {
     private var idCounter = 0L
 
     override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult) {
+        check(externalMessageId !in messages) { "Message $externalMessageId is already registered" }
         messages[externalMessageId] = ProcessedMessage(++idCounter, externalMessageId, receivedAt, result)
     }
 

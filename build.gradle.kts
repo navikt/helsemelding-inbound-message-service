@@ -10,6 +10,10 @@ plugins {
     id("com.gradleup.shadow") version "9.2.2"
 }
 
+kotlin {
+    jvmToolchain(21)
+}
+
 tasks {
     shadowJar {
         mergeServiceFiles()
