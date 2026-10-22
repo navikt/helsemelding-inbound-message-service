@@ -216,8 +216,9 @@ class NotificationServiceSpec : StringSpec(
             validationService.validatedMessage shouldBe messageConverter.splitAttachments(xml).shouldBeRight()
             publisher.publishedAttachmentCount shouldBe 0
 
-            val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
-            result shouldBe ProcessingResult.SUCCESS
+            val processedMessage = messageRepository.findByExternalMessageId(externalMessageId)!!
+            processedMessage.result shouldBe ProcessingResult.SUCCESS
+            processedMessage.contentHash shouldBe messageConverter.calculateContentHash(xml).shouldBeRight()
         }
 
         "Incoming message with attachments should save attachments and publish message without attachments" {
@@ -366,8 +367,9 @@ class NotificationServiceSpec : StringSpec(
             notificationService.processNotification(message)
             ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
 
-            val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
-            result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
+            val processedMessage = messageRepository.findByExternalMessageId(externalMessageId)!!
+            processedMessage.result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
+            processedMessage.contentHash shouldBe null
         }
 
         "Incoming message should not be processed if message ID is invalid" {
@@ -596,7 +598,12 @@ class NotificationServiceSpec : StringSpec(
 
         "refused notifications are deleted without accessing the database" {
             val repository = object : MessageRepository {
-                override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult) {
+                override suspend fun save(
+                    externalMessageId: Uuid,
+                    receivedAt: Instant,
+                    result: ProcessingResult,
+                    contentHash: String?
+                ) {
                     error("Refused notifications must not be persisted")
                 }
                 override suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage? =
@@ -701,7 +708,12 @@ class NotificationServiceSpec : StringSpec(
             givenSuccessfulDocument()
             val failure = IllegalStateException("Database unavailable")
             val repository = object : MessageRepository by messageRepository {
-                override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult) { throw failure }
+                override suspend fun save(
+                    externalMessageId: Uuid,
+                    receivedAt: Instant,
+                    result: ProcessingResult,
+                    contentHash: String?
+                ) { throw failure }
             }
             val service = createNotificationService(repository = repository)
             shouldThrow<IllegalStateException> { service.processNotification(notification(Uuid.random())) } shouldBe failure

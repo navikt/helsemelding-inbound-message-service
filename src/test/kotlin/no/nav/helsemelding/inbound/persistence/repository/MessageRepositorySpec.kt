@@ -34,13 +34,15 @@ class MessageRepositorySpec : StringSpec(
 
                 val externalMessageId = Uuid.random()
                 val receivedAt = Clock.System.now()
+                val contentHash = "a".repeat(64)
 
-                repository.save(externalMessageId, receivedAt, ProcessingResult.SUCCESS)
+                repository.save(externalMessageId, receivedAt, ProcessingResult.SUCCESS, contentHash)
 
                 val saved = repository.findByExternalMessageId(externalMessageId)
                 saved shouldNotBe null
                 saved!!.externalMessageId shouldBe externalMessageId
                 saved.result shouldBe ProcessingResult.SUCCESS
+                saved.contentHash shouldBe contentHash
             }
         }
 
@@ -55,6 +57,7 @@ class MessageRepositorySpec : StringSpec(
 
                 val saved = repository.findByExternalMessageId(externalMessageId)
                 saved!!.result shouldBe ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
+                saved.contentHash shouldBe null
             }
         }
 

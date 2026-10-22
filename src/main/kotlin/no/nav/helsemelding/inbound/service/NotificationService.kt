@@ -25,6 +25,7 @@ import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.metrics.ErrorTypeTag
 import no.nav.helsemelding.inbound.metrics.Metrics
 import no.nav.helsemelding.inbound.model.Attachment
+import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.DECODING_BUSINESS_DOCUMENT_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
@@ -104,10 +105,19 @@ class NotificationService(
 
     private suspend fun processAndRecordMessage(externalMessageId: Uuid, receiverHerId: Int) {
         val receivedAt = Clock.System.now()
-        val result = processNewMessage(externalMessageId, receiverHerId)
+
+        val messageProcessingOutcome = processNewMessage(externalMessageId, receiverHerId)
+        val result = messageProcessingOutcome.result
         if (result == IGNORED_APPREC) return
+
+        messageRepository.save(
+            externalMessageId,
+            receivedAt,
+            result,
+            messageProcessingOutcome.contentHash
+        )
+
         metrics.registerIncomingMessageReceived()
-        messageRepository.save(externalMessageId, receivedAt, result)
         if (result != SUCCESS) {
             metrics.registerIncomingMessageFailed(ErrorTypeTag.valueOf(result.name))
             log.error { "Failed processing message $externalMessageId: $result" }
@@ -121,16 +131,21 @@ class NotificationService(
     private suspend fun processNewMessage(
         externalMessageId: Uuid,
         receiverHerId: Int
-    ): ProcessingResult = either {
+    ): MessageProcessingOutcome = either {
         val xml = fetchBusinessDocument(externalMessageId).bind()
         ensure(isNotApprec(xml)) { IGNORED_APPREC }
+
         prepareAndPublishMessage(externalMessageId, xml).bind()
         markMessageAsDownloaded(externalMessageId, receiverHerId).bind()
         sendAppRec(externalMessageId, receiverHerId).bind()
+
         log.info { "Successfully processed incoming message $externalMessageId" }
-        SUCCESS
+        MessageProcessingOutcome(
+            SUCCESS,
+            calculateContentHash(xml)
+        )
     }
-        .getOrElse { it }
+        .getOrElse { MessageProcessingOutcome(it, null) }
 
     // TODO This should be moved to the message converter as a public API function
     private fun isNotApprec(xml: String): Boolean = Either.catch {
@@ -243,6 +258,16 @@ class NotificationService(
 
     private fun List<ConverterAttachment>.toAttachments(): List<Attachment> = map {
         Attachment(description = it.description, contentType = it.contentType, contentBase64 = it.contentBase64)
+    }
+
+    private fun calculateContentHash(xml: String): String? {
+        val messageId = messageConverter.extractMessageId(xml)
+            .onLeft { log.error { "Failed extracting XML message ID for content hash calculation: $it" } }
+            .getOrElse { null }
+
+        return messageConverter.calculateContentHash(xml)
+            .onLeft { log.error { "Failed calculating content hash for message $messageId" } }
+            .getOrElse { null }
     }
 }
 
