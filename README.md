@@ -83,7 +83,7 @@ val messageRepository = ExposedMessageRepository(deps.database)
 val notificationService = NotificationService(
     LocalEdiAdapterClient(),
     LocalMessagePublisher(),
-    AttachmentStorageService(LocalAttachmentClient()),
+    LocalAttachmentClient(),
     MsgHeadMessageConverter(),
     FakeMetrics(),
     ExposedMessageRepository(deps.database),
