@@ -9,7 +9,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
 import no.nav.helsemelding.inbound.client.ClamAvClient
-import no.nav.helsemelding.inbound.persistence.model.ValidationResult
+import no.nav.helsemelding.inbound.model.ValidationResult
 import no.nav.helsemelding.messageconverter.model.Attachment
 import no.nav.helsemelding.messageconverter.model.SplitMessage
 import java.io.IOException

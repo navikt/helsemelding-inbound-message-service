@@ -1,4 +1,4 @@
-package no.nav.helsemelding.inbound.persistence.model
+package no.nav.helsemelding.inbound.model
 
 enum class ProcessingResult {
     SUCCESS,

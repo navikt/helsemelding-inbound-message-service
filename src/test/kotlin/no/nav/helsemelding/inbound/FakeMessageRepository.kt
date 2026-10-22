@@ -1,8 +1,8 @@
 package no.nav.helsemelding.inbound
 
-import no.nav.helsemelding.inbound.persistence.model.ProcessedMessage
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
-import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
+import no.nav.helsemelding.inbound.model.ProcessedMessage
+import no.nav.helsemelding.inbound.model.ProcessingResult
+import no.nav.helsemelding.inbound.repository.MessageRepository
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
