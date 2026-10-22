@@ -2,10 +2,12 @@ package no.nav.helsemelding.inbound.client
 
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -13,6 +15,8 @@ import io.ktor.client.engine.mock.toByteArray
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.SerializationException
 import no.nav.helsemelding.inbound.model.ScanResult
 import no.nav.helsemelding.inbound.model.ScanStatus
 import no.nav.helsemelding.messageconverter.model.Attachment
@@ -109,12 +113,29 @@ class ClamAvClientSpec : StringSpec(
             }
         }
 
+        "Should return a failure for an invalid JSON response" {
+            val engine = MockEngine { respond("invalid JSON") }
+            HttpClient(engine).use { httpClient ->
+                ClamAvClient(httpClient).scanAttachments(listOf(attachment))
+                    .shouldBeLeft().shouldBeInstanceOf<SerializationException>()
+            }
+        }
+
         "Should skip requests when there are no attachments" {
             val engine = MockEngine { error("No request expected") }
             HttpClient(engine).use { httpClient ->
                 val results = ClamAvClient(httpClient).scanAttachments(emptyList())
 
                 results.shouldBeRight() shouldBe emptyList()
+            }
+        }
+
+        "Should propagate cancellation instead of returning a failure" {
+            val engine = MockEngine { throw CancellationException("Scan cancelled") }
+            HttpClient(engine).use { httpClient ->
+                shouldThrow<CancellationException> {
+                    ClamAvClient(httpClient).scanAttachments(listOf(attachment))
+                }
             }
         }
 

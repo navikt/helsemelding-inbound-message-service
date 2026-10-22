@@ -1,7 +1,6 @@
 package no.nav.helsemelding.inbound.service
 
 import arrow.core.Either
-import arrow.core.flatMap
 import arrow.core.getOrElse
 import arrow.core.raise.either
 import arrow.core.raise.ensure
@@ -13,6 +12,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import no.nav.helsemelding.attachmentclient.AttachmentClient
 import no.nav.helsemelding.ediadapter.client.EdiAdapterClient
 import no.nav.helsemelding.ediadapter.model.v3.AppRecStatus
 import no.nav.helsemelding.ediadapter.model.v3.DeleteNotificationsRequest
@@ -24,21 +24,21 @@ import no.nav.helsemelding.ediadapter.model.v3.UnreadNotification
 import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.metrics.ErrorTypeTag
 import no.nav.helsemelding.inbound.metrics.Metrics
-import no.nav.helsemelding.inbound.model.Attachment
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.DECODING_BUSINESS_DOCUMENT_FAILED
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.IGNORED_APPREC
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.MARKING_MESSAGE_AS_DOWNLOADED_FAILED
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.SAVING_ATTACHMENTS_FAILED
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.SENDING_APPREC_FAILED
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.SPLITTING_MESSAGE_FAILED
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.SUCCESS
-import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
+import no.nav.helsemelding.inbound.model.ProcessingResult
+import no.nav.helsemelding.inbound.model.ProcessingResult.DECODING_BUSINESS_DOCUMENT_FAILED
+import no.nav.helsemelding.inbound.model.ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
+import no.nav.helsemelding.inbound.model.ProcessingResult.IGNORED_APPREC
+import no.nav.helsemelding.inbound.model.ProcessingResult.MARKING_MESSAGE_AS_DOWNLOADED_FAILED
+import no.nav.helsemelding.inbound.model.ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
+import no.nav.helsemelding.inbound.model.ProcessingResult.RETRIEVING_BUSINESS_DOCUMENT_FAILED
+import no.nav.helsemelding.inbound.model.ProcessingResult.SAVING_ATTACHMENTS_FAILED
+import no.nav.helsemelding.inbound.model.ProcessingResult.SENDING_APPREC_FAILED
+import no.nav.helsemelding.inbound.model.ProcessingResult.SPLITTING_MESSAGE_FAILED
+import no.nav.helsemelding.inbound.model.ProcessingResult.SUCCESS
 import no.nav.helsemelding.inbound.publisher.MessagePublisher
+import no.nav.helsemelding.inbound.repository.MessageRepository
 import no.nav.helsemelding.inbound.util.registerDuration
+import no.nav.helsemelding.inbound.util.toEither
 import no.nav.helsemelding.inbound.util.withSpan
 import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 import no.nav.helsemelding.messageconverter.model.SplitMessage
@@ -48,6 +48,7 @@ import java.util.Base64
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
+import no.nav.helsemelding.attachmentmodel.model.Attachment as ClientAttachment
 import no.nav.helsemelding.messageconverter.model.Attachment as ConverterAttachment
 
 private val log = KotlinLogging.logger {}
@@ -56,7 +57,7 @@ private val tracer = GlobalOpenTelemetry.getTracer("NotificationService")
 class NotificationService(
     private val ediAdapterClient: EdiAdapterClient,
     private val messagePublisher: MessagePublisher,
-    private val attachmentService: AttachmentService,
+    private val attachmentClient: AttachmentClient,
     private val messageConverter: MsgHeadMessageConverter,
     private val metrics: Metrics,
     private val messageRepository: MessageRepository,
@@ -75,29 +76,32 @@ class NotificationService(
             .launchIn(scope)
     }
 
-    internal suspend fun processNotification(notification: UnreadNotification) {
+    internal suspend fun processNotification(notification: UnreadNotification): Unit =
         when (notification.type) {
-            NEW_MESSAGE -> processNewMessageNotification(notification)
-            REFUSED_MESSAGE -> processRefusedMessageNotification(notification)
-            else -> return // Status notifications belong to outbound-message-service.
+            NEW_MESSAGE -> {
+                processNewMessageNotification(notification)
+                deleteNotification(notification.notificationId)
+            }
+            REFUSED_MESSAGE -> {
+                processRefusedMessageNotification(notification)
+                deleteNotification(notification.notificationId)
+            }
+            else -> {} // Status notifications belong to outbound-message-service.
         }
-        deleteNotification(notification.notificationId)
-    }
 
     private suspend fun processNewMessageNotification(notification: UnreadNotification) {
-        val externalMessageId = notification.relatedMessageId ?: run {
+        val externalMessageId = notification.relatedMessageId
+        if (externalMessageId == null) {
             log.error { "New message notification ${notification.notificationId} has no related message ID" }
             metrics.registerIncomingMessageFailed(ErrorTypeTag.MISSING_EXTERNAL_MESSAGE_ID)
-            return
-        }
-        if (messageRepository.findByExternalMessageId(externalMessageId) != null) return
-
-        tracer.withSpan("Process incoming message") {
-            registerDuration(metrics::registerIncomingMessageProcessingDuration) {
-                processAndRecordMessage(
-                    externalMessageId,
-                    notification.notificationReceiverHerId
-                )
+        } else if (messageRepository.findByExternalMessageId(externalMessageId) == null) {
+            tracer.withSpan("Process incoming message") {
+                registerDuration(metrics::registerIncomingMessageProcessingDuration) {
+                    processAndRecordMessage(
+                        externalMessageId,
+                        notification.notificationReceiverHerId
+                    )
+                }
             }
         }
     }
@@ -105,12 +109,13 @@ class NotificationService(
     private suspend fun processAndRecordMessage(externalMessageId: Uuid, receiverHerId: Int) {
         val receivedAt = Clock.System.now()
         val result = processNewMessage(externalMessageId, receiverHerId)
-        if (result == IGNORED_APPREC) return
-        metrics.registerIncomingMessageReceived()
-        messageRepository.save(externalMessageId, receivedAt, result)
-        if (result != SUCCESS) {
-            metrics.registerIncomingMessageFailed(ErrorTypeTag.valueOf(result.name))
-            log.error { "Failed processing message $externalMessageId: $result" }
+        if (result != IGNORED_APPREC) {
+            metrics.registerIncomingMessageReceived()
+            messageRepository.save(externalMessageId, receivedAt, result)
+            if (result != SUCCESS) {
+                metrics.registerIncomingMessageFailed(ErrorTypeTag.valueOf(result.name))
+                log.error { "Failed processing message $externalMessageId: $result" }
+            }
         }
     }
 
@@ -159,10 +164,13 @@ class NotificationService(
         }
 
     private suspend fun fetchBusinessDocument(externalMessageId: Uuid): Either<ProcessingResult, String> =
-        ediAdapterClient.getBusinessDocument(externalMessageId)
-            .onLeft { log.error { "Failed retrieving document for $externalMessageId: $it" } }
-            .mapLeft { RETRIEVING_BUSINESS_DOCUMENT_FAILED }
-            .flatMap { decodeBusinessDocument(externalMessageId, it.businessDocument) }
+        either {
+            val document = ediAdapterClient.getBusinessDocument(externalMessageId)
+                .onLeft { log.error { "Failed retrieving document for $externalMessageId: $it" } }
+                .mapLeft { RETRIEVING_BUSINESS_DOCUMENT_FAILED }
+                .bind()
+            decodeBusinessDocument(externalMessageId, document.businessDocument).bind()
+        }
 
     private fun decodeBusinessDocument(externalMessageId: Uuid, base64: String): Either<ProcessingResult, String> =
         Either.catch {
@@ -186,25 +194,31 @@ class NotificationService(
         attachments: List<ConverterAttachment>
     ): Either<ProcessingResult, Unit> = either {
         if (attachments.isNotEmpty()) {
-            attachmentService.saveAttachments(messageId, attachments.toAttachments())
-                .onLeft { log.error { "Failed saving attachments for $messageId: $it" } }
+            val clientAttachments = attachments.map {
+                ClientAttachment(
+                    description = it.description,
+                    contentType = it.contentType,
+                    contentBase64 = it.contentBase64
+                )
+            }
+            attachmentClient.saveAttachments(messageId, clientAttachments)
+                .toEither()
+                .onLeft { failure -> log.error(failure) { "Failed saving attachments for $messageId" } }
                 .mapLeft { SAVING_ATTACHMENTS_FAILED }
                 .bind()
         }
     }
 
     private suspend fun publishMessage(messageId: Uuid, message: SplitMessage): Either<ProcessingResult, Unit> =
-        either {
-            messagePublisher.publish(
-                messageId.toString(),
-                message.messageWithoutAttachmentsXml.toByteArray(Charsets.UTF_8),
-                message.attachments.size
-            )
-                .getOrElse { failure ->
-                    log.error(failure) { "Failed publishing message $messageId to Kafka" }
-                    raise(PUBLISHING_TO_KAFKA_FAILED)
-                }
-        }
+        messagePublisher.publish(
+            messageId.toString(),
+            message.messageWithoutAttachmentsXml.toByteArray(Charsets.UTF_8),
+            message.attachments.size
+        )
+            .toEither()
+            .onLeft { failure -> log.error(failure) { "Failed publishing message $messageId to Kafka" } }
+            .mapLeft { PUBLISHING_TO_KAFKA_FAILED }
+            .map { }
 
     private suspend fun markMessageAsDownloaded(
         externalMessageId: Uuid,
@@ -214,9 +228,9 @@ class NotificationService(
             .onLeft { log.error { "Failed marking message $externalMessageId as downloaded: $it" } }
             .mapLeft { MARKING_MESSAGE_AS_DOWNLOADED_FAILED }
 
-    private suspend fun sendAppRec(externalMessageId: Uuid, receiverHerId: Int): Either<ProcessingResult, Unit> {
-        // TODO: Send AppRec after feedback from fagsystem instead of immediately after publication.
-        return ediAdapterClient.postApprec(
+    // TODO: Send AppRec after feedback from fagsystem instead of immediately after publication.
+    private suspend fun sendAppRec(externalMessageId: Uuid, receiverHerId: Int): Either<ProcessingResult, Unit> =
+        ediAdapterClient.postApprec(
             externalMessageId,
             PostAppRecRequest(
                 appRecSenderHerId = receiverHerId,
@@ -226,7 +240,6 @@ class NotificationService(
             .onLeft { log.error { "Failed sending AppRec for $externalMessageId: $it" } }
             .mapLeft { SENDING_APPREC_FAILED }
             .map { }
-    }
 
     private suspend fun deleteNotification(notificationId: Uuid) {
         ediAdapterClient.deleteNotifications(DeleteNotificationsRequest(listOf(notificationId)))
@@ -235,10 +248,6 @@ class NotificationService(
                 metrics.registerIncomingMessageFailed(ErrorTypeTag.DELETING_NOTIFICATION_FAILED)
             }
             .onRight { log.info { "Successfully deleted notification $notificationId" } }
-    }
-
-    private fun List<ConverterAttachment>.toAttachments(): List<Attachment> = map {
-        Attachment(description = it.description, contentType = it.contentType, contentBase64 = it.contentBase64)
     }
 }
 

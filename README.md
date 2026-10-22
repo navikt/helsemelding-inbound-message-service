@@ -66,7 +66,7 @@ For local message processing, replace the notification service's external depend
 val notificationService = NotificationService(
     LocalEdiAdapterClient(),
     LocalMessagePublisher(),
-    AttachmentStorageService(LocalAttachmentClient()),
+    LocalAttachmentClient(),
     MsgHeadMessageConverter(),
     FakeMetrics(),
     ExposedMessageRepository(deps.database),

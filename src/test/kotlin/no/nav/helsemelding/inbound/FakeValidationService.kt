@@ -1,6 +1,6 @@
 package no.nav.helsemelding.inbound
 
-import no.nav.helsemelding.inbound.persistence.model.ValidationResult
+import no.nav.helsemelding.inbound.model.ValidationResult
 import no.nav.helsemelding.inbound.service.ValidationService
 import no.nav.helsemelding.messageconverter.model.SplitMessage
 import kotlin.uuid.Uuid

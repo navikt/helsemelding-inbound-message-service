@@ -22,7 +22,7 @@ import no.nav.helsemelding.ediadapter.model.common.GetBusinessDocumentResponse
 import no.nav.helsemelding.ediadapter.model.v3.NotificationType
 import no.nav.helsemelding.ediadapter.model.v3.PostApprecResponse
 import no.nav.helsemelding.ediadapter.model.v3.UnreadNotification
-import no.nav.helsemelding.inbound.FakeAttachmentService
+import no.nav.helsemelding.inbound.FakeAttachmentClient
 import no.nav.helsemelding.inbound.FakeEdiAdapterClient
 import no.nav.helsemelding.inbound.FakeMessagePublisher
 import no.nav.helsemelding.inbound.FakeMessageRepository
@@ -31,10 +31,10 @@ import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.metrics.CustomMetrics
 import no.nav.helsemelding.inbound.metrics.FakeMetrics
 import no.nav.helsemelding.inbound.metrics.Metrics
-import no.nav.helsemelding.inbound.persistence.model.ProcessedMessage
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
-import no.nav.helsemelding.inbound.persistence.model.ValidationResult
-import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
+import no.nav.helsemelding.inbound.model.ProcessedMessage
+import no.nav.helsemelding.inbound.model.ProcessingResult
+import no.nav.helsemelding.inbound.model.ValidationResult
+import no.nav.helsemelding.inbound.repository.MessageRepository
 import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
@@ -50,7 +50,7 @@ class NotificationServiceSpec : StringSpec(
         lateinit var ediAdapterClient: FakeEdiAdapterClient
         lateinit var publisher: FakeMessagePublisher
         lateinit var notificationService: NotificationService
-        lateinit var attachmentService: FakeAttachmentService
+        lateinit var attachmentClient: FakeAttachmentClient
         lateinit var messageConverter: MsgHeadMessageConverter
         lateinit var messageRepository: FakeMessageRepository
         lateinit var validationService: FakeValidationService
@@ -61,7 +61,7 @@ class NotificationServiceSpec : StringSpec(
         ): NotificationService = NotificationService(
             ediAdapterClient,
             publisher,
-            attachmentService,
+            attachmentClient,
             messageConverter,
             metrics,
             repository,
@@ -71,7 +71,7 @@ class NotificationServiceSpec : StringSpec(
         beforeEach {
             ediAdapterClient = FakeEdiAdapterClient()
             publisher = FakeMessagePublisher()
-            attachmentService = FakeAttachmentService()
+            attachmentClient = FakeAttachmentClient()
             messageConverter = MsgHeadMessageConverter()
             messageRepository = FakeMessageRepository()
             validationService = FakeValidationService()
@@ -99,7 +99,7 @@ class NotificationServiceSpec : StringSpec(
             notificationService.processNotification(message)
             messageRepository.findByExternalMessageId(externalMessageId) shouldBe null
             publisher.publishedPayload shouldBe null
-            attachmentService.saveAttachmentsCallCount shouldBe 0
+            attachmentClient.saveAttachmentsCallCount shouldBe 0
         }
 
         "NEW_MESSAGE with a standalone AppRec is deleted without processing or recording a failure" {
@@ -140,7 +140,7 @@ class NotificationServiceSpec : StringSpec(
             ediAdapterClient.downloadedRequests shouldBe emptyList()
             ediAdapterClient.apprecRequests shouldBe emptyList()
             publisher.publishCount shouldBe 0
-            attachmentService.saveAttachmentsCallCount shouldBe 0
+            attachmentClient.saveAttachmentsCallCount shouldBe 0
             validationService.validatedMessage shouldBe null
             registry.find("helsemelding_incoming_messages_received").counter() shouldBe null
             registry.find("helsemelding_incoming_messages_failed").counter() shouldBe null
@@ -196,8 +196,8 @@ class NotificationServiceSpec : StringSpec(
                 )
             )
 
-            attachmentService.givenSaveAttachmentsEither(
-                Unit.right()
+            attachmentClient.givenSaveAttachmentsResult(
+                Result.success(Unit)
             )
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
@@ -215,6 +215,7 @@ class NotificationServiceSpec : StringSpec(
             String(publisher.publishedPayload!!) shouldBe messageConverter.expectedPayload(xml)
             validationService.validatedMessage shouldBe messageConverter.splitAttachments(xml).shouldBeRight()
             publisher.publishedAttachmentCount shouldBe 0
+            attachmentClient.saveAttachmentsCallCount shouldBe 0
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
             result shouldBe ProcessingResult.SUCCESS
@@ -243,8 +244,8 @@ class NotificationServiceSpec : StringSpec(
                 )
             )
 
-            attachmentService.givenSaveAttachmentsEither(
-                Unit.right()
+            attachmentClient.givenSaveAttachmentsResult(
+                Result.success(Unit)
             )
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
@@ -259,10 +260,10 @@ class NotificationServiceSpec : StringSpec(
             notificationService.processNotification(message)
 
             validationService.validatedMessage shouldBe messageConverter.splitAttachments(xml).shouldBeRight()
-            attachmentService.saveAttachmentsCallCount shouldBe 1
-            attachmentService.savedMessageId shouldBe xmlMessageId
+            attachmentClient.saveAttachmentsCallCount shouldBe 1
+            attachmentClient.savedMessageId shouldBe xmlMessageId
 
-            val savedAttachments = attachmentService.savedAttachments!!
+            val savedAttachments = attachmentClient.savedAttachments!!
             savedAttachments.map { it.description } shouldBe listOf(
                 "Testvedlegg 1",
                 "Testvedlegg 2",
@@ -274,6 +275,8 @@ class NotificationServiceSpec : StringSpec(
                 "application/pdf"
             )
             savedAttachments.all { it.contentBase64.isNotBlank() } shouldBe true
+            savedAttachments.map { it.contentBase64 } shouldBe
+                messageConverter.splitAttachments(xml).shouldBeRight().attachments.map { it.contentBase64 }
 
             val publishedPayload = String(publisher.publishedPayload!!)
             publishedPayload shouldBe messageConverter.expectedPayload(xml)
@@ -427,7 +430,7 @@ class NotificationServiceSpec : StringSpec(
                 service.processNotification(message)
 
                 validationService.validatedMessage shouldBe messageConverter.splitAttachments(xml).shouldBeRight()
-                attachmentService.saveAttachmentsCallCount shouldBe 0
+                attachmentClient.saveAttachmentsCallCount shouldBe 0
                 publisher.publishCount shouldBe 0
                 ediAdapterClient.downloadedRequests shouldBe emptyList()
                 ediAdapterClient.apprecRequests shouldBe emptyList()
@@ -451,8 +454,8 @@ class NotificationServiceSpec : StringSpec(
                 )
             )
 
-            attachmentService.givenSaveAttachmentsEither(
-                RuntimeException("Saving attachments failed").left()
+            attachmentClient.givenSaveAttachmentsResult(
+                Result.failure(RuntimeException("Saving attachments failed"))
             )
 
             val message = UnreadNotification(
@@ -467,6 +470,9 @@ class NotificationServiceSpec : StringSpec(
 
             val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
             result shouldBe ProcessingResult.SAVING_ATTACHMENTS_FAILED
+            publisher.publishCount shouldBe 0
+            ediAdapterClient.downloadedRequests shouldBe emptyList()
+            ediAdapterClient.apprecRequests shouldBe emptyList()
         }
 
         "Incoming message should not be processed if publishing to Kafka fails" {
@@ -485,8 +491,8 @@ class NotificationServiceSpec : StringSpec(
                 )
             )
 
-            attachmentService.givenSaveAttachmentsEither(
-                Unit.right()
+            attachmentClient.givenSaveAttachmentsResult(
+                Result.success(Unit)
             )
 
             publisher.givenPublishingResult(Result.failure(RuntimeException("Kafka unavailable")))
@@ -524,8 +530,8 @@ class NotificationServiceSpec : StringSpec(
             val errorMessage500 = EdiAdapterError.Api(500)
             ediAdapterClient.givenMarkAsDownloaded(Left(errorMessage500))
 
-            attachmentService.givenSaveAttachmentsEither(
-                Unit.right()
+            attachmentClient.givenSaveAttachmentsResult(
+                Result.success(Unit)
             )
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
@@ -566,8 +572,8 @@ class NotificationServiceSpec : StringSpec(
                 )
             )
 
-            attachmentService.givenSaveAttachmentsEither(
-                Unit.right()
+            attachmentClient.givenSaveAttachmentsResult(
+                Result.success(Unit)
             )
 
             publisher.givenPublishingResult(buildSuccessfulPublishingResult())
@@ -614,7 +620,7 @@ class NotificationServiceSpec : StringSpec(
             ediAdapterClient.documentRequests shouldBe emptyList()
             ediAdapterClient.downloadedRequests shouldBe emptyList()
             ediAdapterClient.apprecRequests shouldBe emptyList()
-            attachmentService.saveAttachmentsCallCount shouldBe 0
+            attachmentClient.saveAttachmentsCallCount shouldBe 0
             publisher.publishCount shouldBe 0
             validationService.validatedMessage shouldBe null
         }
