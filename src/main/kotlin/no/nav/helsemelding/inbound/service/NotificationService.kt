@@ -235,11 +235,7 @@ class NotificationService(
             externalMessageId,
             PostAppRecRequest(
                 appRecSenderHerId = receiverHerId,
-                appRecStatus = AppRecStatus.OK,
-                // TODO: Let edi-adapter set name/version for AppRec, as for postMessage:
-                // https://github.com/navikt/helsemelding-edi-adapter/commit/c7ccb09c3c402d37ff85a248282f7926266579c2
-                applicationName = "edi-adapter",
-                applicationVersion = "1.0"
+                appRecStatus = AppRecStatus.OK
             )
         )
             .onLeft { log.error { "Failed sending AppRec for $externalMessageId: $it" } }
