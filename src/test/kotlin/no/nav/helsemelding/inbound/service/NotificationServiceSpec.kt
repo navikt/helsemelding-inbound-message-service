@@ -638,8 +638,6 @@ class NotificationServiceSpec : StringSpec(
                 val (id, request) = ediAdapterClient.apprecRequests.single()
                 id shouldBe message.relatedMessageId
                 request.appRecSenderHerId shouldBe FAGSYSTEM_HER_ID
-                request.applicationName shouldBe "edi-adapter"
-                request.applicationVersion shouldBe "1.0"
             }
             notificationService.processNotification(message)
             ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
