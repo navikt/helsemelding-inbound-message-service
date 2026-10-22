@@ -30,6 +30,7 @@ interface MessageRepository {
         contentHash: String? = null
     )
     suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage?
+    suspend fun findByContentHash(contentHash: String): ProcessedMessage?
 }
 
 class ExposedMessageRepository(private val database: Database) : MessageRepository {
@@ -51,6 +52,22 @@ class ExposedMessageRepository(private val database: Database) : MessageReposito
     override suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage? = suspendTransaction(database) {
         ProcessedMessages.selectAll()
             .where { ProcessedMessages.externalMessageId eq externalMessageId }
+            .singleOrNull()
+            ?.let {
+                ProcessedMessage(
+                    id = it[ProcessedMessages.id],
+                    externalMessageId = it[ProcessedMessages.externalMessageId],
+                    receivedAt = it[ProcessedMessages.receivedAt],
+                    result = it[ProcessedMessages.result],
+                    contentHash = it[ProcessedMessages.contentHash]
+                )
+            }
+    }
+
+    override suspend fun findByContentHash(contentHash: String): ProcessedMessage? = suspendTransaction(database) {
+        ProcessedMessages.selectAll()
+            .where { ProcessedMessages.contentHash eq contentHash }
+            .limit(1)
             .singleOrNull()
             ?.let {
                 ProcessedMessage(

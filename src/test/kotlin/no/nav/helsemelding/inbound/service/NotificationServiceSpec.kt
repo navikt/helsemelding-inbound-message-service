@@ -608,6 +608,8 @@ class NotificationServiceSpec : StringSpec(
                 }
                 override suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage? =
                     error("Refused notifications must not access the database")
+                override suspend fun findByContentHash(contentHash: String): ProcessedMessage? =
+                    error("Refused notifications must not access the database")
             }
             val service = createNotificationService(repository = repository)
             val refusedNotifications = listOf(null, Uuid.random()).map {

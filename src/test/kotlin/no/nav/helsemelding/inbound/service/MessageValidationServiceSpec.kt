@@ -8,11 +8,14 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
+import no.nav.helsemelding.inbound.FakeMessageRepository
 import no.nav.helsemelding.inbound.client.ClamAvClient
+import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.persistence.model.ValidationResult
 import no.nav.helsemelding.messageconverter.model.Attachment
 import no.nav.helsemelding.messageconverter.model.SplitMessage
 import java.io.IOException
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 class MessageValidationServiceSpec : StringSpec(
@@ -20,6 +23,7 @@ class MessageValidationServiceSpec : StringSpec(
         val attachment = Attachment("Test attachment", "text/plain", "dGVzdA==")
         val message = SplitMessage("<MsgHead/>", listOf(attachment, attachment))
         val messageId = Uuid.random()
+        val messageRepository = FakeMessageRepository()
 
         "Should accept attachments when all scanning results are OK" {
             val engine = MockEngine {
@@ -34,8 +38,8 @@ class MessageValidationServiceSpec : StringSpec(
             }
 
             HttpClient(engine).use { client ->
-                val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(message, messageId) shouldBe ValidationResult.OK
+                val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
+                validationService.validate(message, messageId, null) shouldBe ValidationResult.OK
             }
         }
 
@@ -53,8 +57,8 @@ class MessageValidationServiceSpec : StringSpec(
                 }
 
                 HttpClient(engine).use { client ->
-                    val validationService = MessageValidationService(ClamAvClient(client))
-                    validationService.validate(message, messageId) shouldBe ValidationResult.VIRUS_DETECTED
+                    val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
+                    validationService.validate(message, messageId, null) shouldBe ValidationResult.VIRUS_DETECTED
                 }
             }
         }
@@ -69,8 +73,8 @@ class MessageValidationServiceSpec : StringSpec(
                 val engine = MockEngine { respond(response) }
 
                 HttpClient(engine).use { client ->
-                    val validationService = MessageValidationService(ClamAvClient(client))
-                    validationService.validate(message, messageId) shouldBe expected
+                    val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
+                    validationService.validate(message, messageId, null) shouldBe expected
                 }
             }
         }
@@ -79,8 +83,8 @@ class MessageValidationServiceSpec : StringSpec(
             val engine = MockEngine { respond("Failed", HttpStatusCode.InternalServerError) }
 
             HttpClient(engine).use { client ->
-                val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(message, messageId) shouldBe ValidationResult.VIRUS_SCAN_FAILED
+                val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
+                validationService.validate(message, messageId, null) shouldBe ValidationResult.VIRUS_SCAN_FAILED
             }
         }
 
@@ -88,8 +92,8 @@ class MessageValidationServiceSpec : StringSpec(
             val engine = MockEngine { throw IOException("Connection failed") }
 
             HttpClient(engine).use { client ->
-                val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(message, messageId) shouldBe ValidationResult.VIRUS_SCAN_FAILED
+                val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
+                validationService.validate(message, messageId, null) shouldBe ValidationResult.VIRUS_SCAN_FAILED
             }
         }
 
@@ -101,8 +105,8 @@ class MessageValidationServiceSpec : StringSpec(
                     attachments = listOf(attachment.copy(contentBase64 = "invalid!"))
                 )
 
-                val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(invalidMessage, messageId) shouldBe ValidationResult.VIRUS_SCAN_FAILED
+                val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
+                validationService.validate(invalidMessage, messageId, null) shouldBe ValidationResult.VIRUS_SCAN_FAILED
             }
         }
 
@@ -110,8 +114,8 @@ class MessageValidationServiceSpec : StringSpec(
             val engine = MockEngine { error("No request expected") }
 
             HttpClient(engine).use { client ->
-                val validationService = MessageValidationService(ClamAvClient(client))
-                validationService.validate(message.copy(attachments = emptyList()), messageId) shouldBe ValidationResult.OK
+                val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
+                validationService.validate(message.copy(attachments = emptyList()), messageId, null) shouldBe ValidationResult.OK
             }
         }
 
@@ -120,9 +124,26 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 shouldThrow<CancellationException> {
-                    val validationService = MessageValidationService(ClamAvClient(client))
-                    validationService.validate(message, messageId)
+                    val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
+                    validationService.validate(message, messageId, null)
                 }
+            }
+        }
+
+        "Should reject duplicate content" {
+            val contentHash = "a".repeat(64)
+            messageRepository.save(
+                Uuid.random(),
+                Clock.System.now(),
+                ProcessingResult.SUCCESS,
+                contentHash
+            )
+            val engine = MockEngine { error("Duplicate messages must not be scanned") }
+
+            HttpClient(engine).use { client ->
+                val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
+                val validationResult = validationService.validate(message, messageId, contentHash)
+                validationResult shouldBe ValidationResult.DUPLICATE_MESSAGE_DETECTED
             }
         }
     }

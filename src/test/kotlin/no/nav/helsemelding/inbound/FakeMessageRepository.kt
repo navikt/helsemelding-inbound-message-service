@@ -21,4 +21,7 @@ class FakeMessageRepository : MessageRepository {
     }
 
     override suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage? = messages[externalMessageId]
+
+    override suspend fun findByContentHash(contentHash: String): ProcessedMessage? =
+        messages.values.firstOrNull { it.contentHash == contentHash }
 }

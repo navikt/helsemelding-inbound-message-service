@@ -134,15 +134,16 @@ class NotificationService(
     ): MessageProcessingOutcome = either {
         val xml = fetchBusinessDocument(externalMessageId).bind()
         ensure(isNotApprec(xml)) { IGNORED_APPREC }
+        val contentHash = calculateContentHash(xml)
 
-        prepareAndPublishMessage(externalMessageId, xml).bind()
+        prepareAndPublishMessage(externalMessageId, xml, contentHash).bind()
         markMessageAsDownloaded(externalMessageId, receiverHerId).bind()
         sendAppRec(externalMessageId, receiverHerId).bind()
 
         log.info { "Successfully processed incoming message $externalMessageId" }
         MessageProcessingOutcome(
             SUCCESS,
-            calculateContentHash(xml)
+            contentHash
         )
     }
         .getOrElse { MessageProcessingOutcome(it, null) }
@@ -158,12 +159,16 @@ class NotificationService(
     }
         .getOrElse { true } // Invalid XML is reported by the MsgHead converter.
 
-    private suspend fun prepareAndPublishMessage(externalMessageId: Uuid, xml: String): Either<ProcessingResult, Unit> =
+    private suspend fun prepareAndPublishMessage(
+        externalMessageId: Uuid,
+        xml: String,
+        contentHash: String?
+    ): Either<ProcessingResult, Unit> =
         either {
             val messageId = extractMessageId(externalMessageId, xml).bind()
             val splitMessage = splitAttachments(externalMessageId, xml).bind()
 
-            val validationResult = validationService.validate(splitMessage, messageId)
+            val validationResult = validationService.validate(splitMessage, messageId, contentHash)
             validationResult.processingResult?.let { failure ->
                 log.error { "Validation failed for message $messageId: $validationResult" }
                 raise(failure)

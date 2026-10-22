@@ -89,6 +89,19 @@ class MessageRepositorySpec : StringSpec(
             }
         }
 
+        "findByContentHash should find matching hashes" {
+            resourceScope {
+                val database = database(postgresContainer.jdbcUrl)
+                val repository = ExposedMessageRepository(database)
+                val contentHash = "b".repeat(64)
+
+                repository.save(Uuid.random(), Clock.System.now(), ProcessingResult.SUCCESS, contentHash)
+
+                repository.findByContentHash(contentHash)!!.contentHash shouldBe contentHash
+                repository.findByContentHash("c".repeat(64)) shouldBe null
+            }
+        }
+
         "external message ID remains unique and the original result is preserved" {
             resourceScope {
                 val database = database(postgresContainer.jdbcUrl)
