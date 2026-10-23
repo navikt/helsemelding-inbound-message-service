@@ -3,6 +3,7 @@ package no.nav.helsemelding.inbound.service
 import arrow.core.Either
 import arrow.core.flatMap
 import arrow.core.getOrElse
+import arrow.core.raise.context.bind
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -27,6 +28,7 @@ import no.nav.helsemelding.inbound.metrics.Metrics
 import no.nav.helsemelding.inbound.model.Attachment
 import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
+import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.CALCULATING_CONTENT_HASH_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.DECODING_BUSINESS_DOCUMENT_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.IGNORED_APPREC
@@ -134,7 +136,7 @@ class NotificationService(
     ): MessageProcessingOutcome = either {
         val xml = fetchBusinessDocument(externalMessageId).bind()
         ensure(isNotApprec(xml)) { IGNORED_APPREC }
-        val contentHash = calculateContentHash(xml)
+        val contentHash = calculateContentHash(xml).bind()
 
         prepareAndPublishMessage(externalMessageId, xml, contentHash).bind()
         markMessageAsDownloaded(externalMessageId, receiverHerId).bind()
@@ -261,14 +263,16 @@ class NotificationService(
         Attachment(description = it.description, contentType = it.contentType, contentBase64 = it.contentBase64)
     }
 
-    private fun calculateContentHash(xml: String): String? {
+    private fun calculateContentHash(xml: String): Either<ProcessingResult, String> = either {
         val messageId = messageConverter.extractMessageId(xml)
             .onLeft { log.error { "Failed extracting XML message ID for content hash calculation: $it" } }
-            .getOrElse { null }
+            .mapLeft { EXTRACTING_MESSAGE_ID_FAILED }
+            .bind()
 
-        return messageConverter.calculateContentHash(xml)
+        messageConverter.calculateContentHash(xml)
             .onLeft { log.error { "Failed calculating content hash for message $messageId" } }
-            .getOrElse { null }
+            .mapLeft { CALCULATING_CONTENT_HASH_FAILED }
+            .bind()
     }
 }
 

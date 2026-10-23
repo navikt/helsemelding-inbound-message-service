@@ -5,6 +5,7 @@ import arrow.core.Either.Right
 import arrow.core.left
 import arrow.core.right
 import arrow.fx.coroutines.resourceScope
+import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -221,6 +222,40 @@ class NotificationServiceSpec : StringSpec(
             processedMessage.contentHash shouldBe messageConverter.calculateContentHash(xml).shouldBeRight()
         }
 
+        "Content hash failure should stop processing and record the failure" {
+            val xml = readFileToString("message/incomingDialogMessage.xml")
+                .replace(Regex("<Patient>.*?</Patient>", RegexOption.DOT_MATCHES_ALL), "")
+            messageConverter.extractMessageId(xml).shouldBeRight()
+            messageConverter.calculateContentHash(xml).shouldBeLeft()
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                GetBusinessDocumentResponse(
+                    Base64.getEncoder().encodeToString(xml.toByteArray()),
+                    "application/xml",
+                    "base64"
+                ).right()
+            )
+            publisher.givenPublishingResult(buildSuccessfulPublishingResult())
+            val registry = SimpleMeterRegistry()
+            val service = createNotificationService(metrics = CustomMetrics(registry))
+            val message = notification(Uuid.random())
+
+            service.processNotification(message)
+
+            val processedMessage = messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!
+            processedMessage.result shouldBe ProcessingResult.CALCULATING_CONTENT_HASH_FAILED
+            processedMessage.contentHash shouldBe null
+            validationService.validatedMessage shouldBe null
+            validationService.validatedContentHash shouldBe null
+            attachmentService.saveAttachmentsCallCount shouldBe 0
+            publisher.publishCount shouldBe 0
+            ediAdapterClient.downloadedRequests shouldBe emptyList()
+            ediAdapterClient.apprecRequests shouldBe emptyList()
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
+            registry.get("helsemelding_incoming_messages_received").counter().count() shouldBe 1.0
+            registry.get("helsemelding_incoming_messages_failed")
+                .tag("error_type", "calculating_content_hash_failed").counter().count() shouldBe 1.0
+        }
+
         "Incoming message with attachments should save attachments and publish message without attachments" {
             val externalMessageId = Uuid.random()
 
@@ -341,7 +376,7 @@ class NotificationServiceSpec : StringSpec(
             result shouldBe ProcessingResult.SPLITTING_MESSAGE_FAILED
         }
 
-        "Incoming message should not be processed if extracting message ID fails" {
+        "Invalid XML should fail message ID extraction before calculating content hash" {
             val externalMessageId = Uuid.random()
 
             val xml = "<MsgHead>"
