@@ -7,5 +7,6 @@ data class ProcessedMessage(
     val id: Long,
     val externalMessageId: Uuid,
     val receivedAt: Instant,
-    val result: ProcessingResult
+    val result: ProcessingResult,
+    val xmlMessageId: Uuid? = null
 )

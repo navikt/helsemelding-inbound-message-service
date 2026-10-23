@@ -23,7 +23,8 @@ For `NEW_MESSAGE`, inbound:
 4. Saves attachments (if any) using the XML message ID.
 5. Publishes XML without attachments to Kafka, keyed by the XML message ID and including the attachment count as Kafka header.
 6. Marks the EDI message as downloaded and sends an AppRec.
-7. Persists the processing result before deleting the notification.
+7. Persists the processing result, EDI Adapter message ID and XML message ID before deleting
+   the notification. The XML message ID is null when it could not be extracted.
 
 In production, `MessageValidationService` uses `ClamAvClient` to scan attachments; messages without 
 attachments skip scanning. `VIRUS_DETECTED` and `VIRUS_SCAN_FAILED` stop processing before attachment storage, 
