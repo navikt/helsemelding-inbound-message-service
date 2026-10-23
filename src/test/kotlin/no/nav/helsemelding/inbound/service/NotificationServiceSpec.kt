@@ -32,6 +32,7 @@ import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.metrics.CustomMetrics
 import no.nav.helsemelding.inbound.metrics.FakeMetrics
 import no.nav.helsemelding.inbound.metrics.Metrics
+import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.persistence.model.ProcessedMessage
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.persistence.model.ValidationResult
@@ -636,8 +637,7 @@ class NotificationServiceSpec : StringSpec(
                 override suspend fun save(
                     externalMessageId: Uuid,
                     receivedAt: Instant,
-                    result: ProcessingResult,
-                    contentHash: String?
+                    processingOutcome: MessageProcessingOutcome
                 ) {
                     error("Refused notifications must not be persisted")
                 }
@@ -707,7 +707,14 @@ class NotificationServiceSpec : StringSpec(
             }
             for (result in failures) {
                 val message = notification(Uuid.random())
-                messageRepository.save(message.relatedMessageId!!, kotlin.time.Clock.System.now(), result)
+                messageRepository.save(
+                    message.relatedMessageId!!,
+                    kotlin.time.Clock.System.now(),
+                    MessageProcessingOutcome(
+                        result,
+                        null
+                    )
+                )
                 notificationService.processNotification(message)
                 messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!.result shouldBe result
             }
@@ -746,8 +753,7 @@ class NotificationServiceSpec : StringSpec(
                 override suspend fun save(
                     externalMessageId: Uuid,
                     receivedAt: Instant,
-                    result: ProcessingResult,
-                    contentHash: String?
+                    processingOutcome: MessageProcessingOutcome
                 ) { throw failure }
             }
             val service = createNotificationService(repository = repository)

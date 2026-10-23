@@ -115,8 +115,7 @@ class NotificationService(
         messageRepository.save(
             externalMessageId,
             receivedAt,
-            result,
-            messageProcessingOutcome.contentHash
+            messageProcessingOutcome
         )
 
         metrics.registerIncomingMessageReceived()

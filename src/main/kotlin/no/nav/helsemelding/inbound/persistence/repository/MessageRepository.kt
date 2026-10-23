@@ -1,5 +1,6 @@
 package no.nav.helsemelding.inbound.persistence.repository
 
+import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.persistence.model.ProcessedMessage
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.util.UuidTransformer
@@ -26,8 +27,7 @@ interface MessageRepository {
     suspend fun save(
         externalMessageId: Uuid,
         receivedAt: Instant,
-        result: ProcessingResult,
-        contentHash: String? = null
+        processingOutcome: MessageProcessingOutcome
     )
     suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage?
     suspend fun findByContentHash(contentHash: String): ProcessedMessage?
@@ -37,15 +37,14 @@ class ExposedMessageRepository(private val database: Database) : MessageReposito
     override suspend fun save(
         externalMessageId: Uuid,
         receivedAt: Instant,
-        result: ProcessingResult,
-        contentHash: String?
+        processingOutcome: MessageProcessingOutcome
     ): Unit =
         suspendTransaction(database) {
             ProcessedMessages.insert {
                 it[ProcessedMessages.externalMessageId] = externalMessageId
                 it[ProcessedMessages.receivedAt] = receivedAt
-                it[ProcessedMessages.result] = result
-                it[ProcessedMessages.contentHash] = contentHash
+                it[ProcessedMessages.result] = processingOutcome.result
+                it[ProcessedMessages.contentHash] = processingOutcome.contentHash
             }
         }
 

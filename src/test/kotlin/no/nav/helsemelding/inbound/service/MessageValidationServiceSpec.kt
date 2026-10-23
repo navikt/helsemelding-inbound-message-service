@@ -10,6 +10,7 @@ import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
 import no.nav.helsemelding.inbound.FakeMessageRepository
 import no.nav.helsemelding.inbound.client.ClamAvClient
+import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.persistence.model.ValidationResult
 import no.nav.helsemelding.messageconverter.model.Attachment
@@ -135,8 +136,10 @@ class MessageValidationServiceSpec : StringSpec(
             messageRepository.save(
                 Uuid.random(),
                 Clock.System.now(),
-                ProcessingResult.SUCCESS,
-                contentHash
+                MessageProcessingOutcome(
+                    ProcessingResult.SUCCESS,
+                    contentHash
+                )
             )
             val engine = MockEngine { error("Duplicate messages must not be scanned") }
 
