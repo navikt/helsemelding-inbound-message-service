@@ -1,5 +1,6 @@
 package no.nav.helsemelding.inbound.persistence.repository
 
+import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.persistence.model.ProcessedMessage
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.util.UuidTransformer
@@ -19,20 +20,31 @@ object ProcessedMessages : Table("processed_messages") {
     val externalMessageId = uuid("external_message_id").transform(UuidTransformer())
     val receivedAt = timestamp("received_at")
     val result = enumerationByName("result", 50, ProcessingResult::class)
+    val contentHash = varchar("content_hash", 64).nullable()
 }
 
 interface MessageRepository {
-    suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult)
+    suspend fun save(
+        externalMessageId: Uuid,
+        receivedAt: Instant,
+        processingOutcome: MessageProcessingOutcome
+    )
     suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage?
+    suspend fun findByContentHash(contentHash: String): ProcessedMessage?
 }
 
 class ExposedMessageRepository(private val database: Database) : MessageRepository {
-    override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult): Unit =
+    override suspend fun save(
+        externalMessageId: Uuid,
+        receivedAt: Instant,
+        processingOutcome: MessageProcessingOutcome
+    ): Unit =
         suspendTransaction(database) {
             ProcessedMessages.insert {
                 it[ProcessedMessages.externalMessageId] = externalMessageId
                 it[ProcessedMessages.receivedAt] = receivedAt
-                it[ProcessedMessages.result] = result
+                it[ProcessedMessages.result] = processingOutcome.result
+                it[ProcessedMessages.contentHash] = processingOutcome.contentHash
             }
         }
 
@@ -45,7 +57,24 @@ class ExposedMessageRepository(private val database: Database) : MessageReposito
                     id = it[ProcessedMessages.id],
                     externalMessageId = it[ProcessedMessages.externalMessageId],
                     receivedAt = it[ProcessedMessages.receivedAt],
-                    result = it[ProcessedMessages.result]
+                    result = it[ProcessedMessages.result],
+                    contentHash = it[ProcessedMessages.contentHash]
+                )
+            }
+    }
+
+    override suspend fun findByContentHash(contentHash: String): ProcessedMessage? = suspendTransaction(database) {
+        ProcessedMessages.selectAll()
+            .where { ProcessedMessages.contentHash eq contentHash }
+            .limit(1)
+            .singleOrNull()
+            ?.let {
+                ProcessedMessage(
+                    id = it[ProcessedMessages.id],
+                    externalMessageId = it[ProcessedMessages.externalMessageId],
+                    receivedAt = it[ProcessedMessages.receivedAt],
+                    result = it[ProcessedMessages.result],
+                    contentHash = it[ProcessedMessages.contentHash]
                 )
             }
     }

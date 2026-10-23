@@ -4,6 +4,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import no.nav.helsemelding.inbound.client.ClamAvClient
 import no.nav.helsemelding.inbound.model.ScanStatus
 import no.nav.helsemelding.inbound.persistence.model.ValidationResult
+import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
 import no.nav.helsemelding.messageconverter.model.Attachment
 import no.nav.helsemelding.messageconverter.model.SplitMessage
 import kotlin.uuid.Uuid
@@ -11,20 +12,39 @@ import kotlin.uuid.Uuid
 private val log = KotlinLogging.logger {}
 
 fun interface ValidationService {
-    suspend fun validate(splitMessage: SplitMessage, messageId: Uuid): ValidationResult
+    suspend fun validate(
+        splitMessage: SplitMessage,
+        messageId: Uuid,
+        contentHash: String?
+    ): ValidationResult
 }
 
 class MessageValidationService(
-    private val clamAvClient: ClamAvClient
+    private val clamAvClient: ClamAvClient,
+    private val messageRepository: MessageRepository
 ) : ValidationService {
     override suspend fun validate(
         splitMessage: SplitMessage,
-        messageId: Uuid
+        messageId: Uuid,
+        contentHash: String?
     ): ValidationResult {
-        val result = checkAttachmentsForViruses(splitMessage.attachments, messageId)
+        var result: ValidationResult? = null
+
+        result = checkDuplicates(contentHash, messageId)
+        if (result != ValidationResult.OK) return result
+
+        result = checkAttachmentsForViruses(splitMessage.attachments, messageId)
         if (result != ValidationResult.OK) return result
 
         log.debug { "Message $messageId validated successfully" }
+        return ValidationResult.OK
+    }
+
+    private suspend fun checkDuplicates(contentHash: String?, messageId: Uuid): ValidationResult {
+        if (contentHash != null && messageRepository.findByContentHash(contentHash) != null) {
+            log.warn { "Message $messageId rejected because its content matches a previously processed message" }
+            return ValidationResult.DUPLICATE_MESSAGE_DETECTED
+        }
         return ValidationResult.OK
     }
 

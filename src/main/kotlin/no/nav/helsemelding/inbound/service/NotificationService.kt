@@ -3,6 +3,7 @@ package no.nav.helsemelding.inbound.service
 import arrow.core.Either
 import arrow.core.flatMap
 import arrow.core.getOrElse
+import arrow.core.raise.context.bind
 import arrow.core.raise.either
 import arrow.core.raise.ensure
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -25,7 +26,9 @@ import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.metrics.ErrorTypeTag
 import no.nav.helsemelding.inbound.metrics.Metrics
 import no.nav.helsemelding.inbound.model.Attachment
+import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
+import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.CALCULATING_CONTENT_HASH_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.DECODING_BUSINESS_DOCUMENT_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.IGNORED_APPREC
@@ -104,10 +107,18 @@ class NotificationService(
 
     private suspend fun processAndRecordMessage(externalMessageId: Uuid, receiverHerId: Int) {
         val receivedAt = Clock.System.now()
-        val result = processNewMessage(externalMessageId, receiverHerId)
+
+        val messageProcessingOutcome = processNewMessage(externalMessageId, receiverHerId)
+        val result = messageProcessingOutcome.result
         if (result == IGNORED_APPREC) return
+
+        messageRepository.save(
+            externalMessageId,
+            receivedAt,
+            messageProcessingOutcome
+        )
+
         metrics.registerIncomingMessageReceived()
-        messageRepository.save(externalMessageId, receivedAt, result)
         if (result != SUCCESS) {
             metrics.registerIncomingMessageFailed(ErrorTypeTag.valueOf(result.name))
             log.error { "Failed processing message $externalMessageId: $result" }
@@ -121,16 +132,22 @@ class NotificationService(
     private suspend fun processNewMessage(
         externalMessageId: Uuid,
         receiverHerId: Int
-    ): ProcessingResult = either {
+    ): MessageProcessingOutcome = either {
         val xml = fetchBusinessDocument(externalMessageId).bind()
         ensure(isNotApprec(xml)) { IGNORED_APPREC }
-        prepareAndPublishMessage(externalMessageId, xml).bind()
+        val contentHash = calculateContentHash(xml).bind()
+
+        prepareAndPublishMessage(externalMessageId, xml, contentHash).bind()
         markMessageAsDownloaded(externalMessageId, receiverHerId).bind()
         sendAppRec(externalMessageId, receiverHerId).bind()
+
         log.info { "Successfully processed incoming message $externalMessageId" }
-        SUCCESS
+        MessageProcessingOutcome(
+            SUCCESS,
+            contentHash
+        )
     }
-        .getOrElse { it }
+        .getOrElse { MessageProcessingOutcome(it, null) }
 
     // TODO This should be moved to the message converter as a public API function
     private fun isNotApprec(xml: String): Boolean = Either.catch {
@@ -143,12 +160,16 @@ class NotificationService(
     }
         .getOrElse { true } // Invalid XML is reported by the MsgHead converter.
 
-    private suspend fun prepareAndPublishMessage(externalMessageId: Uuid, xml: String): Either<ProcessingResult, Unit> =
+    private suspend fun prepareAndPublishMessage(
+        externalMessageId: Uuid,
+        xml: String,
+        contentHash: String?
+    ): Either<ProcessingResult, Unit> =
         either {
             val messageId = extractMessageId(externalMessageId, xml).bind()
             val splitMessage = splitAttachments(externalMessageId, xml).bind()
 
-            val validationResult = validationService.validate(splitMessage, messageId)
+            val validationResult = validationService.validate(splitMessage, messageId, contentHash)
             validationResult.processingResult?.let { failure ->
                 log.error { "Validation failed for message $messageId: $validationResult" }
                 raise(failure)
@@ -239,6 +260,18 @@ class NotificationService(
 
     private fun List<ConverterAttachment>.toAttachments(): List<Attachment> = map {
         Attachment(description = it.description, contentType = it.contentType, contentBase64 = it.contentBase64)
+    }
+
+    private fun calculateContentHash(xml: String): Either<ProcessingResult, String> = either {
+        val messageId = messageConverter.extractMessageId(xml)
+            .onLeft { log.error { "Failed extracting XML message ID for content hash calculation: $it" } }
+            .mapLeft { EXTRACTING_MESSAGE_ID_FAILED }
+            .bind()
+
+        messageConverter.calculateContentHash(xml)
+            .onLeft { log.error { "Failed calculating content hash for message $messageId" } }
+            .mapLeft { CALCULATING_CONTENT_HASH_FAILED }
+            .bind()
     }
 }
 

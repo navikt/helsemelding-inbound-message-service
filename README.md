@@ -18,17 +18,21 @@ The services share notification ownership:
 For `NEW_MESSAGE`, inbound:
 
 1. Fetches and decodes the Base64 XML business document.
-2. Extracts the XML message ID and attachments.
-3. Validates the split message through `ValidationService`.
+2. Calculates the content hash using `MsgHeadMessageConverter.calculateContentHash`, then extracts the XML message ID and attachments.
+3. Validates the split message through `ValidationService`:
+   - Checks for duplicate content.
+   - Scans attachments for viruses.
 4. Saves attachments (if any) using the XML message ID.
 5. Publishes XML without attachments to Kafka, keyed by the XML message ID and including the attachment count as Kafka header.
 6. Marks the EDI message as downloaded and sends an AppRec.
-7. Persists the processing result before deleting the notification.
+7. Persists the processing result and, for `SUCCESS`, the content hash before deleting the notification.
 
-In production, `MessageValidationService` uses `ClamAvClient` to scan attachments; messages without 
-attachments skip scanning. `VIRUS_DETECTED` and `VIRUS_SCAN_FAILED` stop processing before attachment storage, 
-Kafka publication, download marking and AppRec. The failure is persisted and counted once, then the notification 
-is deleted.
+`MessageValidationService` first looks up the hash using `MessageRepository.findByContentHash`.
+A match returns `DUPLICATE_MESSAGE_DETECTED` and skips attachment scanning. Otherwise, it uses
+`ClamAvClient` to scan attachments; messages without attachments skip scanning.
+`DUPLICATE_MESSAGE_DETECTED`, `VIRUS_DETECTED` and `VIRUS_SCAN_FAILED` stop processing before attachment
+storage, Kafka publication, download marking and AppRec. The failure is persisted and counted once,
+then the notification is deleted.
 
 AppRec is currently sent immediately after publication.
 
@@ -63,6 +67,8 @@ Polling settings have been removed. Replace any `POLLER_HER_ID` environment over
 For local message processing, replace the notification service's external dependencies in `App.kt`:
 
 ```kotlin
+val messageRepository = ExposedMessageRepository(deps.database)
+
 val notificationService = NotificationService(
     LocalEdiAdapterClient(),
     LocalMessagePublisher(),
@@ -70,6 +76,9 @@ val notificationService = NotificationService(
     MsgHeadMessageConverter(),
     FakeMetrics(),
     ExposedMessageRepository(deps.database),
-    MessageValidationService(deps.clamAvClient)
+    MessageValidationService(
+        deps.clamAvClient,
+        ExposedMessageRepository(deps.database)
+    )
 )
 ```

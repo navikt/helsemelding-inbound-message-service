@@ -12,5 +12,7 @@ enum class ErrorTypeTag(val value: String) {
     SAVING_ATTACHMENTS_FAILED("saving_attachments_failed"),
     EXTRACTING_MESSAGE_ID_FAILED("extracting_message_id_failed"),
     VIRUS_DETECTED("validating_virus_detected"),
-    VIRUS_SCAN_FAILED("validating_virus_scan_failed")
+    VIRUS_SCAN_FAILED("validating_virus_scan_failed"),
+    DUPLICATE_MESSAGE_DETECTED("validating_duplicate_message_detected"),
+    CALCULATING_CONTENT_HASH_FAILED("calculating_content_hash_failed")
 }
