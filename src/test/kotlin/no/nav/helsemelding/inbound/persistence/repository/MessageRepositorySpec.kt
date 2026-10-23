@@ -40,7 +40,26 @@ class MessageRepositorySpec : StringSpec(
                 val saved = repository.findByExternalMessageId(externalMessageId)
                 saved shouldNotBe null
                 saved!!.externalMessageId shouldBe externalMessageId
+                saved.xmlMessageId shouldBe null
                 saved.result shouldBe ProcessingResult.SUCCESS
+            }
+        }
+
+        "save should persist XML message ID" {
+            resourceScope {
+                val database = database(postgresContainer.jdbcUrl)
+                val repository = ExposedMessageRepository(database)
+                val externalMessageId = Uuid.random()
+                val xmlMessageId = Uuid.random()
+
+                repository.save(
+                    externalMessageId,
+                    Clock.System.now(),
+                    ProcessingResult.SUCCESS,
+                    xmlMessageId
+                )
+
+                repository.findByExternalMessageId(externalMessageId)!!.xmlMessageId shouldBe xmlMessageId
             }
         }
 

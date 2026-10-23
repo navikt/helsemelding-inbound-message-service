@@ -17,20 +17,32 @@ object ProcessedMessages : Table("processed_messages") {
     val id = long("id").autoIncrement()
     override val primaryKey = PrimaryKey(id)
     val externalMessageId = uuid("external_message_id").transform(UuidTransformer())
+    val xmlMessageId = uuid("xml_message_id").transform(UuidTransformer()).nullable()
     val receivedAt = timestamp("received_at")
     val result = enumerationByName("result", 50, ProcessingResult::class)
 }
 
 interface MessageRepository {
-    suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult)
+    suspend fun save(
+        externalMessageId: Uuid,
+        receivedAt: Instant,
+        result: ProcessingResult,
+        xmlMessageId: Uuid? = null
+    )
     suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage?
 }
 
 class ExposedMessageRepository(private val database: Database) : MessageRepository {
-    override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult): Unit =
+    override suspend fun save(
+        externalMessageId: Uuid,
+        receivedAt: Instant,
+        result: ProcessingResult,
+        xmlMessageId: Uuid?
+    ): Unit =
         suspendTransaction(database) {
             ProcessedMessages.insert {
                 it[ProcessedMessages.externalMessageId] = externalMessageId
+                it[ProcessedMessages.xmlMessageId] = xmlMessageId
                 it[ProcessedMessages.receivedAt] = receivedAt
                 it[ProcessedMessages.result] = result
             }
@@ -45,7 +57,8 @@ class ExposedMessageRepository(private val database: Database) : MessageReposito
                     id = it[ProcessedMessages.id],
                     externalMessageId = it[ProcessedMessages.externalMessageId],
                     receivedAt = it[ProcessedMessages.receivedAt],
-                    result = it[ProcessedMessages.result]
+                    result = it[ProcessedMessages.result],
+                    xmlMessageId = it[ProcessedMessages.xmlMessageId]
                 )
             }
     }

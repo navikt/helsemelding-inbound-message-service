@@ -10,9 +10,14 @@ class FakeMessageRepository : MessageRepository {
     private val messages = mutableMapOf<Uuid, ProcessedMessage>()
     private var idCounter = 0L
 
-    override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult) {
+    override suspend fun save(
+        externalMessageId: Uuid,
+        receivedAt: Instant,
+        result: ProcessingResult,
+        xmlMessageId: Uuid?
+    ) {
         check(externalMessageId !in messages) { "Message $externalMessageId is already registered" }
-        messages[externalMessageId] = ProcessedMessage(++idCounter, externalMessageId, receivedAt, result)
+        messages[externalMessageId] = ProcessedMessage(++idCounter, externalMessageId, receivedAt, result, xmlMessageId)
     }
 
     override suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage? = messages[externalMessageId]
