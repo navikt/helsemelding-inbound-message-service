@@ -45,11 +45,9 @@ import no.nav.helsemelding.inbound.publisher.MessagePublisher
 import no.nav.helsemelding.inbound.util.registerDuration
 import no.nav.helsemelding.inbound.util.withSpan
 import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
+import no.nav.helsemelding.messageconverter.XmlMessageClassifier.isAppRec
 import no.nav.helsemelding.messageconverter.model.SplitMessage
-import org.xml.sax.InputSource
-import java.io.StringReader
 import java.util.Base64
-import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 import no.nav.helsemelding.messageconverter.model.Attachment as ConverterAttachment
@@ -135,7 +133,7 @@ class NotificationService(
         receiverHerId: Int
     ): MessageProcessingOutcome = either {
         val xml = fetchBusinessDocument(externalMessageId).bind()
-        ensure(isNotApprec(xml)) { IGNORED_APPREC }
+        ensure(!isAppRec(xml).getOrElse { false }) { IGNORED_APPREC }
         val contentHash = calculateContentHash(xml).bind()
 
         prepareAndPublishMessage(externalMessageId, xml, contentHash).getOrElse { failure ->
@@ -154,17 +152,6 @@ class NotificationService(
         )
     }
         .getOrElse { MessageProcessingOutcome(it, null) }
-
-    // TODO This should be moved to the message converter as a public API function
-    private fun isNotApprec(xml: String): Boolean = Either.catch {
-        val factory = DocumentBuilderFactory.newInstance().apply {
-            isNamespaceAware = true
-            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-        }
-        val document = factory.newDocumentBuilder().parse(InputSource(StringReader(xml)))
-        document.documentElement.localName != "AppRec"
-    }
-        .getOrElse { true } // Invalid XML is reported by the MsgHead converter.
 
     private suspend fun prepareAndPublishMessage(
         externalMessageId: Uuid,
