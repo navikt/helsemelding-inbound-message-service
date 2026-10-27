@@ -257,6 +257,32 @@ class NotificationServiceSpec : StringSpec(
                 .tag("error_type", "calculating_content_hash_failed").counter().count() shouldBe 1.0
         }
 
+        "Content hash should be saved for duplicate messages but not for other validation failures" {
+            for (validationResult in listOf(
+                ValidationResult.DUPLICATE_MESSAGE_DETECTED,
+                ValidationResult.VIRUS_DETECTED,
+                ValidationResult.VIRUS_SCAN_FAILED
+            )) {
+                givenSuccessfulDocument()
+                validationService.givenValidationResult(validationResult)
+                val message = notification(Uuid.random())
+
+                notificationService.processNotification(message)
+
+                val processedMessage = messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!
+                processedMessage.result shouldBe validationResult.processingResult
+                processedMessage.contentHash shouldBe if (validationResult == ValidationResult.DUPLICATE_MESSAGE_DETECTED) {
+                    messageConverter.calculateContentHash(readFileToString("message/incomingDialogMessage.xml")).shouldBeRight()
+                } else {
+                    null
+                }
+            }
+            attachmentService.saveAttachmentsCallCount shouldBe 0
+            publisher.publishCount shouldBe 0
+            ediAdapterClient.downloadedRequests shouldBe emptyList()
+            ediAdapterClient.apprecRequests shouldBe emptyList()
+        }
+
         "Incoming message with attachments should save attachments and publish message without attachments" {
             val externalMessageId = Uuid.random()
 

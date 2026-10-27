@@ -30,6 +30,7 @@ import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.CALCULATING_CONTENT_HASH_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.DECODING_BUSINESS_DOCUMENT_FAILED
+import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.DUPLICATE_MESSAGE_DETECTED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.IGNORED_APPREC
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult.MARKING_MESSAGE_AS_DOWNLOADED_FAILED
@@ -137,7 +138,12 @@ class NotificationService(
         ensure(isNotApprec(xml)) { IGNORED_APPREC }
         val contentHash = calculateContentHash(xml).bind()
 
-        prepareAndPublishMessage(externalMessageId, xml, contentHash).bind()
+        prepareAndPublishMessage(externalMessageId, xml, contentHash).getOrElse { failure ->
+            return@either MessageProcessingOutcome(
+                failure,
+                contentHash.takeIf { failure == DUPLICATE_MESSAGE_DETECTED }
+            )
+        }
         markMessageAsDownloaded(externalMessageId, receiverHerId).bind()
         sendAppRec(externalMessageId, receiverHerId).bind()
 
