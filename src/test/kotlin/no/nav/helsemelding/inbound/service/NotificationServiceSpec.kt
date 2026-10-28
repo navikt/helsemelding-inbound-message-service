@@ -5,6 +5,7 @@ import arrow.core.Either.Right
 import arrow.core.left
 import arrow.core.right
 import arrow.fx.coroutines.resourceScope
+import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -31,6 +32,7 @@ import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.metrics.CustomMetrics
 import no.nav.helsemelding.inbound.metrics.FakeMetrics
 import no.nav.helsemelding.inbound.metrics.Metrics
+import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.persistence.model.ProcessedMessage
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.persistence.model.ValidationResult
@@ -216,8 +218,69 @@ class NotificationServiceSpec : StringSpec(
             validationService.validatedMessage shouldBe messageConverter.splitAttachments(xml).shouldBeRight()
             publisher.publishedAttachmentCount shouldBe 0
 
-            val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
-            result shouldBe ProcessingResult.SUCCESS
+            val processedMessage = messageRepository.findByExternalMessageId(externalMessageId)!!
+            processedMessage.result shouldBe ProcessingResult.SUCCESS
+            processedMessage.contentHash shouldBe messageConverter.calculateContentHash(xml).shouldBeRight()
+        }
+
+        "Content hash failure should stop processing and record the failure" {
+            val xml = readFileToString("message/incomingDialogMessage.xml")
+                .replace(Regex("<Patient>.*?</Patient>", RegexOption.DOT_MATCHES_ALL), "")
+            messageConverter.extractMessageId(xml).shouldBeRight()
+            messageConverter.calculateContentHash(xml).shouldBeLeft()
+            ediAdapterClient.givenGetBusinessDocumentResponse(
+                GetBusinessDocumentResponse(
+                    Base64.getEncoder().encodeToString(xml.toByteArray()),
+                    "application/xml",
+                    "base64"
+                ).right()
+            )
+            publisher.givenPublishingResult(buildSuccessfulPublishingResult())
+            val registry = SimpleMeterRegistry()
+            val service = createNotificationService(metrics = CustomMetrics(registry))
+            val message = notification(Uuid.random())
+
+            service.processNotification(message)
+
+            val processedMessage = messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!
+            processedMessage.result shouldBe ProcessingResult.CALCULATING_CONTENT_HASH_FAILED
+            processedMessage.contentHash shouldBe null
+            validationService.validatedMessage shouldBe null
+            validationService.validatedContentHash shouldBe null
+            attachmentService.saveAttachmentsCallCount shouldBe 0
+            publisher.publishCount shouldBe 0
+            ediAdapterClient.downloadedRequests shouldBe emptyList()
+            ediAdapterClient.apprecRequests shouldBe emptyList()
+            ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
+            registry.get("helsemelding_incoming_messages_received").counter().count() shouldBe 1.0
+            registry.get("helsemelding_incoming_messages_failed")
+                .tag("error_type", "calculating_content_hash_failed").counter().count() shouldBe 1.0
+        }
+
+        "Content hash should be saved for duplicate messages but not for other validation failures" {
+            for (validationResult in listOf(
+                ValidationResult.DUPLICATE_MESSAGE_DETECTED,
+                ValidationResult.VIRUS_DETECTED,
+                ValidationResult.VIRUS_SCAN_FAILED
+            )) {
+                givenSuccessfulDocument()
+                validationService.givenValidationResult(validationResult)
+                val message = notification(Uuid.random())
+
+                notificationService.processNotification(message)
+
+                val processedMessage = messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!
+                processedMessage.result shouldBe validationResult.processingResult
+                processedMessage.contentHash shouldBe if (validationResult == ValidationResult.DUPLICATE_MESSAGE_DETECTED) {
+                    messageConverter.calculateContentHash(readFileToString("message/incomingDialogMessage.xml")).shouldBeRight()
+                } else {
+                    null
+                }
+            }
+            attachmentService.saveAttachmentsCallCount shouldBe 0
+            publisher.publishCount shouldBe 0
+            ediAdapterClient.downloadedRequests shouldBe emptyList()
+            ediAdapterClient.apprecRequests shouldBe emptyList()
         }
 
         "Incoming message with attachments should save attachments and publish message without attachments" {
@@ -340,7 +403,7 @@ class NotificationServiceSpec : StringSpec(
             result shouldBe ProcessingResult.SPLITTING_MESSAGE_FAILED
         }
 
-        "Incoming message should not be processed if extracting message ID fails" {
+        "Invalid XML should fail message ID extraction before calculating content hash" {
             val externalMessageId = Uuid.random()
 
             val xml = "<MsgHead>"
@@ -366,8 +429,9 @@ class NotificationServiceSpec : StringSpec(
             notificationService.processNotification(message)
             ediAdapterClient.deleteRequests.single().notificationIds shouldBe listOf(message.notificationId)
 
-            val result = messageRepository.findByExternalMessageId(externalMessageId)!!.result
-            result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
+            val processedMessage = messageRepository.findByExternalMessageId(externalMessageId)!!
+            processedMessage.result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
+            processedMessage.contentHash shouldBe null
         }
 
         "Incoming message should not be processed if message ID is invalid" {
@@ -596,10 +660,16 @@ class NotificationServiceSpec : StringSpec(
 
         "refused notifications are deleted without accessing the database" {
             val repository = object : MessageRepository {
-                override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult) {
+                override suspend fun save(
+                    externalMessageId: Uuid,
+                    receivedAt: Instant,
+                    processingOutcome: MessageProcessingOutcome
+                ) {
                     error("Refused notifications must not be persisted")
                 }
                 override suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage? =
+                    error("Refused notifications must not access the database")
+                override suspend fun findByContentHash(contentHash: String): ProcessedMessage? =
                     error("Refused notifications must not access the database")
             }
             val service = createNotificationService(repository = repository)
@@ -663,7 +733,14 @@ class NotificationServiceSpec : StringSpec(
             }
             for (result in failures) {
                 val message = notification(Uuid.random())
-                messageRepository.save(message.relatedMessageId!!, kotlin.time.Clock.System.now(), result)
+                messageRepository.save(
+                    message.relatedMessageId!!,
+                    kotlin.time.Clock.System.now(),
+                    MessageProcessingOutcome(
+                        result,
+                        null
+                    )
+                )
                 notificationService.processNotification(message)
                 messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!.result shouldBe result
             }
@@ -699,7 +776,11 @@ class NotificationServiceSpec : StringSpec(
             givenSuccessfulDocument()
             val failure = IllegalStateException("Database unavailable")
             val repository = object : MessageRepository by messageRepository {
-                override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult) { throw failure }
+                override suspend fun save(
+                    externalMessageId: Uuid,
+                    receivedAt: Instant,
+                    processingOutcome: MessageProcessingOutcome
+                ) { throw failure }
             }
             val service = createNotificationService(repository = repository)
             shouldThrow<IllegalStateException> { service.processNotification(notification(Uuid.random())) } shouldBe failure

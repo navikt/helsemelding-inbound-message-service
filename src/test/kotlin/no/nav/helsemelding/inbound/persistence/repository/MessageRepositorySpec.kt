@@ -7,6 +7,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import no.nav.helsemelding.inbound.container
 import no.nav.helsemelding.inbound.database
+import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -34,13 +35,22 @@ class MessageRepositorySpec : StringSpec(
 
                 val externalMessageId = Uuid.random()
                 val receivedAt = Clock.System.now()
+                val contentHash = "a".repeat(64)
 
-                repository.save(externalMessageId, receivedAt, ProcessingResult.SUCCESS)
+                repository.save(
+                    externalMessageId,
+                    receivedAt,
+                    MessageProcessingOutcome(
+                        ProcessingResult.SUCCESS,
+                        contentHash
+                    )
+                )
 
                 val saved = repository.findByExternalMessageId(externalMessageId)
                 saved shouldNotBe null
                 saved!!.externalMessageId shouldBe externalMessageId
                 saved.result shouldBe ProcessingResult.SUCCESS
+                saved.contentHash shouldBe contentHash
             }
         }
 
@@ -51,10 +61,18 @@ class MessageRepositorySpec : StringSpec(
 
                 val externalMessageId = Uuid.random()
 
-                repository.save(externalMessageId, Clock.System.now(), ProcessingResult.PUBLISHING_TO_KAFKA_FAILED)
+                repository.save(
+                    externalMessageId,
+                    Clock.System.now(),
+                    MessageProcessingOutcome(
+                        ProcessingResult.PUBLISHING_TO_KAFKA_FAILED,
+                        null
+                    )
+                )
 
                 val saved = repository.findByExternalMessageId(externalMessageId)
                 saved!!.result shouldBe ProcessingResult.PUBLISHING_TO_KAFKA_FAILED
+                saved.contentHash shouldBe null
             }
         }
 
@@ -65,7 +83,14 @@ class MessageRepositorySpec : StringSpec(
 
                 val externalMessageId = Uuid.random()
                 val receivedAt = Clock.System.now().truncatedToMicroseconds()
-                repository.save(externalMessageId, receivedAt, ProcessingResult.SUCCESS)
+                repository.save(
+                    externalMessageId,
+                    receivedAt,
+                    MessageProcessingOutcome(
+                        ProcessingResult.SUCCESS,
+                        null
+                    )
+                )
 
                 val found = repository.findByExternalMessageId(externalMessageId)
                 found shouldNotBe null
@@ -86,14 +111,48 @@ class MessageRepositorySpec : StringSpec(
             }
         }
 
+        "findByContentHash should find matching hashes" {
+            resourceScope {
+                val database = database(postgresContainer.jdbcUrl)
+                val repository = ExposedMessageRepository(database)
+                val contentHash = "b".repeat(64)
+
+                repository.save(
+                    Uuid.random(),
+                    Clock.System.now(),
+                    MessageProcessingOutcome(
+                        ProcessingResult.SUCCESS,
+                        contentHash
+                    )
+                )
+
+                repository.findByContentHash(contentHash)!!.contentHash shouldBe contentHash
+                repository.findByContentHash("c".repeat(64)) shouldBe null
+            }
+        }
+
         "external message ID remains unique and the original result is preserved" {
             resourceScope {
                 val database = database(postgresContainer.jdbcUrl)
                 val repository = ExposedMessageRepository(database)
                 val id = Uuid.random()
-                repository.save(id, Clock.System.now(), ProcessingResult.SENDING_APPREC_FAILED)
+                repository.save(
+                    id,
+                    Clock.System.now(),
+                    MessageProcessingOutcome(
+                        ProcessingResult.SENDING_APPREC_FAILED,
+                        null
+                    )
+                )
                 val failure = shouldThrow<SQLException> {
-                    repository.save(id, Clock.System.now(), ProcessingResult.SUCCESS)
+                    repository.save(
+                        id,
+                        Clock.System.now(),
+                        MessageProcessingOutcome(
+                            ProcessingResult.SUCCESS,
+                            null
+                        )
+                    )
                 }
                 failure.sqlState shouldBe "23505"
                 repository.findByExternalMessageId(id)!!.result shouldBe ProcessingResult.SENDING_APPREC_FAILED

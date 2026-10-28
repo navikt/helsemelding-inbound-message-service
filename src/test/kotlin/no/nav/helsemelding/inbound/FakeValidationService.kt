@@ -7,6 +7,7 @@ import kotlin.uuid.Uuid
 
 class FakeValidationService : ValidationService {
     var validatedMessage: SplitMessage? = null
+    var validatedContentHash: String? = null
 
     private var validationResult: ValidationResult = ValidationResult.OK
 
@@ -14,8 +15,9 @@ class FakeValidationService : ValidationService {
         validationResult = result
     }
 
-    override suspend fun validate(splitMessage: SplitMessage, messageId: Uuid): ValidationResult {
+    override suspend fun validate(splitMessage: SplitMessage, messageId: Uuid, contentHash: String?): ValidationResult {
         validatedMessage = splitMessage
+        validatedContentHash = contentHash
         return validationResult
     }
 }

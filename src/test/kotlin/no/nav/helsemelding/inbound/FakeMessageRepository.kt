@@ -1,7 +1,7 @@
 package no.nav.helsemelding.inbound
 
+import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.persistence.model.ProcessedMessage
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
 import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -10,10 +10,23 @@ class FakeMessageRepository : MessageRepository {
     private val messages = mutableMapOf<Uuid, ProcessedMessage>()
     private var idCounter = 0L
 
-    override suspend fun save(externalMessageId: Uuid, receivedAt: Instant, result: ProcessingResult) {
+    override suspend fun save(
+        externalMessageId: Uuid,
+        receivedAt: Instant,
+        processingOutcome: MessageProcessingOutcome
+    ) {
         check(externalMessageId !in messages) { "Message $externalMessageId is already registered" }
-        messages[externalMessageId] = ProcessedMessage(++idCounter, externalMessageId, receivedAt, result)
+        messages[externalMessageId] = ProcessedMessage(
+            ++idCounter,
+            externalMessageId,
+            receivedAt,
+            processingOutcome.result,
+            processingOutcome.contentHash
+        )
     }
 
     override suspend fun findByExternalMessageId(externalMessageId: Uuid): ProcessedMessage? = messages[externalMessageId]
+
+    override suspend fun findByContentHash(contentHash: String): ProcessedMessage? =
+        messages.values.firstOrNull { it.contentHash == contentHash }
 }

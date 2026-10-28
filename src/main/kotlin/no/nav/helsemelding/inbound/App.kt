@@ -50,6 +50,7 @@ fun main() = SuspendApp {
             val dialogMessagePublisher = DialogMessagePublisher(deps.kafkaPublisher)
             val attachmentService = AttachmentStorageService(deps.attachmentClient)
             val messageConverter = MsgHeadMessageConverter()
+            val messageRepository = ExposedMessageRepository(deps.database)
 
             val notificationService = NotificationService(
                 deps.ediAdapterClient,
@@ -57,8 +58,8 @@ fun main() = SuspendApp {
                 attachmentService,
                 messageConverter,
                 metrics,
-                ExposedMessageRepository(deps.database),
-                MessageValidationService(deps.clamAvClient)
+                messageRepository,
+                MessageValidationService(deps.clamAvClient, messageRepository)
             )
 
             val scope = coroutineScope(coroutineContext)
