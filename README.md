@@ -17,9 +17,25 @@ The services share notification ownership:
 
 For `NEW_MESSAGE`, inbound:
 
+1. If the message is an `AppRec`, the service ignores it. `helsemelding-outbound-message-service` processes AppRecs.
+2. For a normal incoming message, the service:
+   - fetches the business document using EDI Adapter.
+   - decodes the Base64 encoded XML payload,
+   - deserializes the `MsgHead` XML,
+   - extracts attachments from the message,
+   - removes the attachments from the `MsgHead` XML,
+   - validates the message
+     - scans attachments with ClamAV's V2 API. Messages without attachments skip the scan. Every scan result must be `OK`
+   - saves the extracted attachments using Attachment Service,
+   - publishes the `MsgHead` XML without attachments to Kafka,
+   - marks the original message as read using EDI Adapter,
+   - sends an `AppRec` to NHN using EDI Adapter.
+
 1. Fetches and decodes the Base64 XML business document.
 2. Extracts the XML message ID and attachments.
 3. Validates the split message through `ValidationService`.
+   - rejects "Henvendelse fra lege" and "Svar på forespørsel" messages when message text is missing or empty
+   - scans attachments with ClamAV's V2 API. Messages without attachments skip the scan. Every scan result must be `OK`
 4. Saves attachments (if any) using the XML message ID.
 5. Publishes XML without attachments to Kafka, keyed by the XML message ID and including the attachment count as Kafka header.
 6. Marks the EDI message as downloaded and sends an AppRec.
