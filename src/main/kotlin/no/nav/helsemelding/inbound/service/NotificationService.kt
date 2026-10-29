@@ -132,46 +132,42 @@ class NotificationService(
     private suspend fun processNewMessage(
         externalMessageId: Uuid,
         receiverHerId: Int
-    ): MessageProcessingOutcome = either {
+    ): MessageProcessingOutcome = either<ProcessingResult, MessageProcessingOutcome> {
         val xml = fetchBusinessDocument(externalMessageId).bind()
         ensure(!isAppRec(xml).getOrElse { false }) { IGNORED_APPREC }
-        val contentHash = calculateContentHash(xml).bind()
 
-        prepareAndPublishMessage(externalMessageId, xml, contentHash).getOrElse { failure ->
-            return@either MessageProcessingOutcome(
+        val contentHash = calculateContentHash(xml).bind()
+        val messageId = extractMessageId(externalMessageId, xml).bind()
+        val splitMessage = splitAttachments(externalMessageId, xml).bind()
+
+        val validationFailure = validateMessage(splitMessage, messageId, contentHash)
+        if (validationFailure != null) return@either validationFailure
+
+        saveAttachments(messageId, splitMessage.attachments).bind()
+        publishMessage(messageId, splitMessage).bind()
+        markMessageAsDownloaded(externalMessageId, receiverHerId).bind()
+
+        sendAppRec(externalMessageId, receiverHerId).bind()
+
+        log.info { "Successfully processed incoming message $externalMessageId" }
+        MessageProcessingOutcome(SUCCESS, contentHash)
+    }
+        .getOrElse { MessageProcessingOutcome(it, null) }
+
+    private suspend fun validateMessage(
+        splitMessage: SplitMessage,
+        messageId: Uuid,
+        contentHash: String?
+    ): MessageProcessingOutcome? {
+        val validationResult = validationService.validate(splitMessage, messageId, contentHash)
+        return validationResult.processingResult?.let { failure ->
+            log.error { "Validation failed for message $messageId: $validationResult" }
+            MessageProcessingOutcome(
                 failure,
                 contentHash.takeIf { failure == DUPLICATE_MESSAGE_DETECTED }
             )
         }
-        markMessageAsDownloaded(externalMessageId, receiverHerId).bind()
-        sendAppRec(externalMessageId, receiverHerId).bind()
-
-        log.info { "Successfully processed incoming message $externalMessageId" }
-        MessageProcessingOutcome(
-            SUCCESS,
-            contentHash
-        )
     }
-        .getOrElse { MessageProcessingOutcome(it, null) }
-
-    private suspend fun prepareAndPublishMessage(
-        externalMessageId: Uuid,
-        xml: String,
-        contentHash: String?
-    ): Either<ProcessingResult, Unit> =
-        either {
-            val messageId = extractMessageId(externalMessageId, xml).bind()
-            val splitMessage = splitAttachments(externalMessageId, xml).bind()
-
-            val validationResult = validationService.validate(splitMessage, messageId, contentHash)
-            validationResult.processingResult?.let { failure ->
-                log.error { "Validation failed for message $messageId: $validationResult" }
-                raise(failure)
-            }
-
-            saveAttachments(messageId, splitMessage.attachments).bind()
-            publishMessage(messageId, splitMessage).bind()
-        }
 
     private suspend fun fetchBusinessDocument(externalMessageId: Uuid): Either<ProcessingResult, String> =
         ediAdapterClient.getBusinessDocument(externalMessageId)
