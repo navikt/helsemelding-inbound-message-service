@@ -16,11 +16,10 @@ import no.nav.helsemelding.ediadapter.model.v3.MshConfiguration
 import no.nav.helsemelding.ediadapter.model.v3.ReceiveNotificationChannel.API
 import no.nav.helsemelding.ediadapter.model.v3.SetMshConfigurationsRequest
 import no.nav.helsemelding.inbound.metrics.CustomMetrics
-import no.nav.helsemelding.inbound.persistence.repository.ExposedMessageRepository
 import no.nav.helsemelding.inbound.plugin.configureMetrics
 import no.nav.helsemelding.inbound.plugin.configureRoutes
 import no.nav.helsemelding.inbound.publisher.DialogMessagePublisher
-import no.nav.helsemelding.inbound.service.AttachmentStorageService
+import no.nav.helsemelding.inbound.repository.ExposedMessageRepository
 import no.nav.helsemelding.inbound.service.MessageValidationService
 import no.nav.helsemelding.inbound.service.NotificationService
 import no.nav.helsemelding.inbound.util.coroutineScope
@@ -48,14 +47,13 @@ fun main() = SuspendApp {
             )
 
             val dialogMessagePublisher = DialogMessagePublisher(deps.kafkaPublisher)
-            val attachmentService = AttachmentStorageService(deps.attachmentClient)
             val messageConverter = MsgHeadMessageConverter()
             val messageRepository = ExposedMessageRepository(deps.database)
 
             val notificationService = NotificationService(
                 deps.ediAdapterClient,
                 dialogMessagePublisher,
-                attachmentService,
+                deps.attachmentClient,
                 messageConverter,
                 metrics,
                 messageRepository,

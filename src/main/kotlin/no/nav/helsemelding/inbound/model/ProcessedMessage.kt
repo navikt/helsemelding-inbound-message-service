@@ -1,4 +1,4 @@
-package no.nav.helsemelding.inbound.persistence.model
+package no.nav.helsemelding.inbound.model
 
 import kotlin.time.Instant
 import kotlin.uuid.Uuid

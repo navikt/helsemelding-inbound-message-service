@@ -10,9 +10,9 @@ import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
 import no.nav.helsemelding.inbound.FakeMessageRepository
 import no.nav.helsemelding.inbound.client.ClamAvClient
-import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
-import no.nav.helsemelding.inbound.persistence.model.ValidationResult
+import no.nav.helsemelding.inbound.model.MessageProcessingOutcome
+import no.nav.helsemelding.inbound.model.ProcessingResult
+import no.nav.helsemelding.inbound.model.ValidationResult
 import no.nav.helsemelding.messageconverter.model.Attachment
 import no.nav.helsemelding.messageconverter.model.SplitMessage
 import java.io.IOException

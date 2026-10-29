@@ -3,8 +3,8 @@ package no.nav.helsemelding.inbound.service
 import io.github.oshai.kotlinlogging.KotlinLogging
 import no.nav.helsemelding.inbound.client.ClamAvClient
 import no.nav.helsemelding.inbound.model.ScanStatus
-import no.nav.helsemelding.inbound.persistence.model.ValidationResult
-import no.nav.helsemelding.inbound.persistence.repository.MessageRepository
+import no.nav.helsemelding.inbound.model.ValidationResult
+import no.nav.helsemelding.inbound.repository.MessageRepository
 import no.nav.helsemelding.messageconverter.model.Attachment
 import no.nav.helsemelding.messageconverter.model.SplitMessage
 import kotlin.uuid.Uuid

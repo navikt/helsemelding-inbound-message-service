@@ -1,8 +1,8 @@
-package no.nav.helsemelding.inbound.persistence.repository
+package no.nav.helsemelding.inbound.repository
 
-import no.nav.helsemelding.inbound.persistence.model.MessageProcessingOutcome
-import no.nav.helsemelding.inbound.persistence.model.ProcessedMessage
-import no.nav.helsemelding.inbound.persistence.model.ProcessingResult
+import no.nav.helsemelding.inbound.model.MessageProcessingOutcome
+import no.nav.helsemelding.inbound.model.ProcessedMessage
+import no.nav.helsemelding.inbound.model.ProcessingResult
 import no.nav.helsemelding.inbound.util.UuidTransformer
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.eq
