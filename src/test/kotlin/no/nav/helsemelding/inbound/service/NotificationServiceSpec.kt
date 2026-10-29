@@ -35,7 +35,6 @@ import no.nav.helsemelding.inbound.metrics.Metrics
 import no.nav.helsemelding.inbound.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.model.ProcessedMessage
 import no.nav.helsemelding.inbound.model.ProcessingResult
-import no.nav.helsemelding.inbound.model.ValidationResult
 import no.nav.helsemelding.inbound.repository.MessageRepository
 import no.nav.helsemelding.messageconverter.MsgHeadMessageConverter
 import org.apache.kafka.clients.producer.RecordMetadata
@@ -260,9 +259,9 @@ class NotificationServiceSpec : StringSpec(
 
         "Content hash should be saved for duplicate messages but not for other validation failures" {
             for (validationResult in listOf(
-                ValidationResult.DUPLICATE_MESSAGE_DETECTED,
-                ValidationResult.VIRUS_DETECTED,
-                ValidationResult.VIRUS_SCAN_FAILED
+                ProcessingResult.DUPLICATE_MESSAGE_DETECTED,
+                ProcessingResult.VIRUS_DETECTED,
+                ProcessingResult.VIRUS_SCAN_FAILED
             )) {
                 givenSuccessfulDocument()
                 validationService.givenValidationResult(validationResult)
@@ -271,8 +270,8 @@ class NotificationServiceSpec : StringSpec(
                 notificationService.processNotification(message)
 
                 val processedMessage = messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!
-                processedMessage.result shouldBe validationResult.processingResult
-                processedMessage.contentHash shouldBe if (validationResult == ValidationResult.DUPLICATE_MESSAGE_DETECTED) {
+                processedMessage.result shouldBe validationResult
+                processedMessage.contentHash shouldBe if (validationResult == ProcessingResult.DUPLICATE_MESSAGE_DETECTED) {
                     messageConverter.calculateContentHash(readFileToString("message/incomingDialogMessage.xml")).shouldBeRight()
                 } else {
                     null
@@ -468,9 +467,9 @@ class NotificationServiceSpec : StringSpec(
             result shouldBe ProcessingResult.EXTRACTING_MESSAGE_ID_FAILED
         }
 
-        for ((validationResult, expectedResult, errorTag) in listOf(
-            Triple(ValidationResult.VIRUS_DETECTED, ProcessingResult.VIRUS_DETECTED, "validating_virus_detected"),
-            Triple(ValidationResult.VIRUS_SCAN_FAILED, ProcessingResult.VIRUS_SCAN_FAILED, "validating_virus_scan_failed")
+        for ((validationResult, errorTag) in listOf(
+            ProcessingResult.VIRUS_DETECTED to "validating_virus_detected",
+            ProcessingResult.VIRUS_SCAN_FAILED to "validating_virus_scan_failed"
         )) {
             "$validationResult is recorded once and prevents attachment storage and publication" {
                 val xml = readFileToString("message_with_attachments.xml")
@@ -486,7 +485,7 @@ class NotificationServiceSpec : StringSpec(
                 val service = createNotificationService(metrics = CustomMetrics(registry))
                 val message = notification(Uuid.random())
                 ediAdapterClient.beforeDelete = {
-                    messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!.result shouldBe expectedResult
+                    messageRepository.findByExternalMessageId(message.relatedMessageId!!)!!.result shouldBe validationResult
                     registry.get("helsemelding_incoming_messages_failed")
                         .tag("error_type", errorTag).counter().count() shouldBe 1.0
                 }

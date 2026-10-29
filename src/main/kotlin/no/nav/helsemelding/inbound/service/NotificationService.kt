@@ -120,7 +120,7 @@ class NotificationService(
 
         metrics.registerIncomingMessageReceived()
         if (result != SUCCESS) {
-            metrics.registerIncomingMessageFailed(ErrorTypeTag.valueOf(result.name))
+            metrics.registerIncomingMessageFailed(result.toErrorTypeTag())
             log.error { "Failed processing message $externalMessageId: $result" }
         }
     }
@@ -160,13 +160,13 @@ class NotificationService(
         contentHash: String?
     ): MessageProcessingOutcome? {
         val validationResult = validationService.validate(splitMessage, messageId, contentHash)
-        return validationResult.processingResult?.let { failure ->
-            log.error { "Validation failed for message $messageId: $validationResult" }
-            MessageProcessingOutcome(
-                failure,
-                contentHash.takeIf { failure == DUPLICATE_MESSAGE_DETECTED }
-            )
-        }
+        if (validationResult == SUCCESS) return null
+
+        log.error { "Validation failed for message $messageId: $validationResult" }
+        return MessageProcessingOutcome(
+            validationResult,
+            contentHash.takeIf { validationResult == DUPLICATE_MESSAGE_DETECTED }
+        )
     }
 
     private suspend fun fetchBusinessDocument(externalMessageId: Uuid): Either<ProcessingResult, String> =
