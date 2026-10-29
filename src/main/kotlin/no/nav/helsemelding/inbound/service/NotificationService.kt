@@ -1,7 +1,6 @@
 package no.nav.helsemelding.inbound.service
 
 import arrow.core.Either
-import arrow.core.flatMap
 import arrow.core.getOrElse
 import arrow.core.raise.either
 import arrow.core.raise.ensure
@@ -169,28 +168,43 @@ class NotificationService(
         )
     }
 
-    private suspend fun fetchBusinessDocument(externalMessageId: Uuid): Either<ProcessingResult, String> =
-        ediAdapterClient.getBusinessDocument(externalMessageId)
-            .onLeft { log.error { "Failed retrieving document for $externalMessageId: $it" } }
-            .mapLeft { RETRIEVING_BUSINESS_DOCUMENT_FAILED }
-            .flatMap { decodeBusinessDocument(externalMessageId, it.businessDocument) }
+    private suspend fun fetchBusinessDocument(
+        externalMessageId: Uuid
+    ): Either<ProcessingResult, String> = either {
+        val response = ediAdapterClient.getBusinessDocument(externalMessageId)
+            .getOrElse { failure ->
+                log.error { "Failed retrieving document for $externalMessageId: $failure" }
+                raise(RETRIEVING_BUSINESS_DOCUMENT_FAILED)
+            }
 
-    private fun decodeBusinessDocument(externalMessageId: Uuid, base64: String): Either<ProcessingResult, String> =
+        decodeBusinessDocument(externalMessageId, response.businessDocument).bind()
+    }
+
+    private fun decodeBusinessDocument(externalMessageId: Uuid, base64: String): Either<ProcessingResult, String> = either {
         Either.catch {
             Base64.getDecoder().decode(base64).toString(Charsets.UTF_8)
         }
-            .onLeft { failure -> log.error(failure) { "Invalid Base64 document for $externalMessageId" } }
-            .mapLeft { DECODING_BUSINESS_DOCUMENT_FAILED }
+            .getOrElse { failure ->
+                log.error(failure) { "Invalid Base64 document for $externalMessageId" }
+                raise(DECODING_BUSINESS_DOCUMENT_FAILED)
+            }
+    }
 
-    private fun extractMessageId(externalMessageId: Uuid, xml: String): Either<ProcessingResult, Uuid> =
+    private fun extractMessageId(externalMessageId: Uuid, xml: String): Either<ProcessingResult, Uuid> = either {
         messageConverter.extractMessageId(xml)
-            .onLeft { log.error { "Failed extracting XML message ID for $externalMessageId: $it" } }
-            .mapLeft { EXTRACTING_MESSAGE_ID_FAILED }
+            .getOrElse { failure ->
+                log.error { "Failed extracting XML message ID for $externalMessageId: $failure" }
+                raise(EXTRACTING_MESSAGE_ID_FAILED)
+            }
+    }
 
-    private fun splitAttachments(externalMessageId: Uuid, xml: String): Either<ProcessingResult, SplitMessage> =
+    private fun splitAttachments(externalMessageId: Uuid, xml: String): Either<ProcessingResult, SplitMessage> = either {
         messageConverter.splitAttachments(xml)
-            .onLeft { log.error { "Failed splitting document for $externalMessageId: $it" } }
-            .mapLeft { SPLITTING_MESSAGE_FAILED }
+            .getOrElse { failure ->
+                log.error { "Failed splitting document for $externalMessageId: $failure" }
+                raise(SPLITTING_MESSAGE_FAILED)
+            }
+    }
 
     private suspend fun saveAttachments(
         messageId: Uuid,
@@ -206,9 +220,10 @@ class NotificationService(
             }
             attachmentClient.saveAttachments(messageId, clientAttachments)
                 .toEither()
-                .onLeft { failure -> log.error(failure) { "Failed saving attachments for $messageId" } }
-                .mapLeft { SAVING_ATTACHMENTS_FAILED }
-                .bind()
+                .getOrElse { failure ->
+                    log.error(failure) { "Failed saving attachments for $messageId" }
+                    raise(SAVING_ATTACHMENTS_FAILED)
+                }
         }
     }
 
@@ -228,23 +243,27 @@ class NotificationService(
     private suspend fun markMessageAsDownloaded(
         externalMessageId: Uuid,
         receiverHerId: Int
-    ): Either<ProcessingResult, Unit> =
+    ): Either<ProcessingResult, Unit> = either {
         ediAdapterClient.markMessageAsDownloaded(externalMessageId, MarkAsDownloadedRequest(receiverHerId))
-            .onLeft { log.error { "Failed marking message $externalMessageId as downloaded: $it" } }
-            .mapLeft { MARKING_MESSAGE_AS_DOWNLOADED_FAILED }
+            .getOrElse { failure ->
+                log.error { "Failed marking message $externalMessageId as downloaded: $failure" }
+                raise(MARKING_MESSAGE_AS_DOWNLOADED_FAILED)
+            }
+    }
 
-    private suspend fun sendAppRec(externalMessageId: Uuid, receiverHerId: Int): Either<ProcessingResult, Unit> {
+    private suspend fun sendAppRec(externalMessageId: Uuid, receiverHerId: Int): Either<ProcessingResult, Unit> = either {
         // TODO: Send AppRec after feedback from fagsystem instead of immediately after publication.
-        return ediAdapterClient.postApprec(
+        ediAdapterClient.postApprec(
             externalMessageId,
             PostAppRecRequest(
                 appRecSenderHerId = receiverHerId,
                 appRecStatus = AppRecStatus.OK
             )
         )
-            .onLeft { log.error { "Failed sending AppRec for $externalMessageId: $it" } }
-            .mapLeft { SENDING_APPREC_FAILED }
-            .map { }
+            .getOrElse { failure ->
+                log.error { "Failed sending AppRec for $externalMessageId: $failure" }
+                raise(SENDING_APPREC_FAILED)
+            }
     }
 
     private suspend fun deleteNotification(notificationId: Uuid) {
@@ -258,14 +277,16 @@ class NotificationService(
 
     private fun calculateContentHash(xml: String): Either<ProcessingResult, String> = either {
         val messageId = messageConverter.extractMessageId(xml)
-            .onLeft { log.error { "Failed extracting XML message ID for content hash calculation: $it" } }
-            .mapLeft { EXTRACTING_MESSAGE_ID_FAILED }
-            .bind()
+            .getOrElse { failure ->
+                log.error { "Failed extracting XML message ID for content hash calculation: $failure" }
+                raise(EXTRACTING_MESSAGE_ID_FAILED)
+            }
 
         messageConverter.calculateContentHash(xml)
-            .onLeft { log.error { "Failed calculating content hash for message $messageId" } }
-            .mapLeft { CALCULATING_CONTENT_HASH_FAILED }
-            .bind()
+            .getOrElse {
+                log.error { "Failed calculating content hash for message $messageId" }
+                raise(CALCULATING_CONTENT_HASH_FAILED)
+            }
     }
 }
 
