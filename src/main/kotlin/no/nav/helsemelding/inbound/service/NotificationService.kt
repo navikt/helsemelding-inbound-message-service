@@ -78,9 +78,6 @@ class NotificationService(
     }
 
     internal suspend fun processNotification(notification: UnreadNotification) {
-        // TODO: Temporary code. Remove before merge
-        processRefusedMessageNotification(notification)
-
         when (notification.type) {
             NEW_MESSAGE -> processNewMessageNotification(notification)
             REFUSED_MESSAGE -> processRefusedMessageNotification(notification)
