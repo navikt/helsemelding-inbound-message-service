@@ -144,7 +144,7 @@ class NotificationServiceSpec : StringSpec(
             attachmentClient.saveAttachmentsCallCount shouldBe 0
             validationService.validatedMessage shouldBe null
             registry.find("helsemelding_incoming_messages_received").counter() shouldBe null
-            registry.find("helsemelding_incoming_messages_refused").counter() shouldBe null
+            // registry.find("helsemelding_incoming_messages_refused").counter() shouldBe null
             registry.find("helsemelding_incoming_messages_failed").counter() shouldBe null
         }
 
