@@ -10,6 +10,7 @@ private val log = KotlinLogging.logger {}
 
 interface Metrics {
     fun registerIncomingMessageReceived()
+    fun registerIncomingMessageRefused()
     fun registerIncomingMessageFailed(errorType: ErrorTypeTag)
     fun registerIncomingMessageProcessingDuration(durationNanos: Long)
 }
@@ -19,6 +20,13 @@ class CustomMetrics(val registry: MeterRegistry) : Metrics {
     override fun registerIncomingMessageReceived() {
         Counter.builder("helsemelding_incoming_messages_received")
             .description("Number of incoming messages received from NHN")
+            .register(registry)
+            .increment()
+    }
+
+    override fun registerIncomingMessageRefused() {
+        Counter.builder("helsemelding_incoming_messages_refused")
+            .description("Number of incoming messages refused")
             .register(registry)
             .increment()
     }
@@ -43,6 +51,10 @@ class CustomMetrics(val registry: MeterRegistry) : Metrics {
 class FakeMetrics() : Metrics {
     override fun registerIncomingMessageReceived() {
         log.info { "helsemelding_incoming_messages_received metric is registered" }
+    }
+
+    override fun registerIncomingMessageRefused() {
+        log.info { "helsemelding_incoming_messages_refused metric is registered" }
     }
 
     override fun registerIncomingMessageFailed(errorType: ErrorTypeTag) {

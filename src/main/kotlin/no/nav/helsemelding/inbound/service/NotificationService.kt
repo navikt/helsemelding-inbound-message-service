@@ -126,6 +126,7 @@ class NotificationService(
 
     private fun processRefusedMessageNotification(notification: UnreadNotification) {
         log.warn { "Incoming message refused: notificationId=${notification.notificationId} externalMessageId=${notification.relatedMessageId}" }
+        metrics.registerIncomingMessageRefused()
     }
 
     private suspend fun processNewMessage(
