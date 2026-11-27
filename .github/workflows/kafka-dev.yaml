@@ -21,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Deploy topics to dev
-        uses: nais/deploy/actions/deploy@1064e26587ab2794266a35f477387e561899a7ef # v2
+        uses: nais/deploy/actions/deploy@6fe576e10c7a325643bad96566bd6cb180a2f782 # v2
         env:
           CLUSTER: dev-gcp
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
