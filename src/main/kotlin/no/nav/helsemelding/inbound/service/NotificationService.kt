@@ -1,6 +1,7 @@
 package no.nav.helsemelding.inbound.service
 
 import arrow.core.Either
+import arrow.core.flatMap
 import arrow.core.getOrElse
 import arrow.core.raise.either
 import arrow.core.raise.ensure
@@ -119,7 +120,7 @@ class NotificationService(
 
         metrics.registerIncomingMessageReceived()
         if (result != SUCCESS) {
-            metrics.registerIncomingMessageFailed(result.toErrorTypeTag())
+            metrics.registerIncomingMessageFailed(ErrorTypeTag.valueOf(result.name))
             log.error { "Failed processing message $externalMessageId: $result" }
         }
     }
@@ -132,80 +133,69 @@ class NotificationService(
     private suspend fun processNewMessage(
         externalMessageId: Uuid,
         receiverHerId: Int
-    ): MessageProcessingOutcome = either<ProcessingResult, MessageProcessingOutcome> {
+    ): MessageProcessingOutcome = either {
         val xml = fetchBusinessDocument(externalMessageId).bind()
         ensure(!isAppRec(xml).getOrElse { false }) { IGNORED_APPREC }
-
         val contentHash = calculateContentHash(xml).bind()
-        val messageId = extractMessageId(externalMessageId, xml).bind()
-        val splitMessage = splitAttachments(externalMessageId, xml).bind()
 
-        val validationFailure = validateMessage(splitMessage, messageId, contentHash)
-        if (validationFailure != null) return@either validationFailure
-
-        saveAttachments(messageId, splitMessage.attachments).bind()
-        publishMessage(messageId, splitMessage).bind()
+        prepareAndPublishMessage(externalMessageId, xml, contentHash).getOrElse { failure ->
+            return@either MessageProcessingOutcome(
+                failure,
+                contentHash.takeIf { failure == DUPLICATE_MESSAGE_DETECTED }
+            )
+        }
         markMessageAsDownloaded(externalMessageId, receiverHerId).bind()
-
         sendAppRec(externalMessageId, receiverHerId).bind()
 
         log.info { "Successfully processed incoming message $externalMessageId" }
-        MessageProcessingOutcome(SUCCESS, contentHash)
+        MessageProcessingOutcome(
+            SUCCESS,
+            contentHash
+        )
     }
         .getOrElse { MessageProcessingOutcome(it, null) }
 
-    private suspend fun validateMessage(
-        splitMessage: SplitMessage,
-        messageId: Uuid,
+    private suspend fun prepareAndPublishMessage(
+        externalMessageId: Uuid,
+        xml: String,
         contentHash: String?
-    ): MessageProcessingOutcome? {
-        val validationResult = validationService.validate(splitMessage, messageId, contentHash)
-        if (validationResult == SUCCESS) return null
+    ): Either<ProcessingResult, Unit> =
+        either {
+            val messageId = extractMessageId(externalMessageId, xml).bind()
+            val splitMessage = splitAttachments(externalMessageId, xml).bind()
 
-        log.error { "Validation failed for message $messageId: $validationResult" }
-        return MessageProcessingOutcome(
-            validationResult,
-            contentHash.takeIf { validationResult == DUPLICATE_MESSAGE_DETECTED }
-        )
-    }
-
-    private suspend fun fetchBusinessDocument(
-        externalMessageId: Uuid
-    ): Either<ProcessingResult, String> = either {
-        val response = ediAdapterClient.getBusinessDocument(externalMessageId)
-            .getOrElse { failure ->
-                log.error { "Failed retrieving document for $externalMessageId: $failure" }
-                raise(RETRIEVING_BUSINESS_DOCUMENT_FAILED)
+            val validationResult = validationService.validate(splitMessage, messageId, contentHash)
+            validationResult.processingResult?.let { failure ->
+                log.error { "Validation failed for message $messageId: $validationResult" }
+                raise(failure)
             }
 
-        decodeBusinessDocument(externalMessageId, response.businessDocument).bind()
-    }
+            saveAttachments(messageId, splitMessage.attachments).bind()
+            publishMessage(messageId, splitMessage).bind()
+        }
 
-    private fun decodeBusinessDocument(externalMessageId: Uuid, base64: String): Either<ProcessingResult, String> = either {
+    private suspend fun fetchBusinessDocument(externalMessageId: Uuid): Either<ProcessingResult, String> =
+        ediAdapterClient.getBusinessDocument(externalMessageId)
+            .onLeft { log.error { "Failed retrieving document for $externalMessageId: $it" } }
+            .mapLeft { RETRIEVING_BUSINESS_DOCUMENT_FAILED }
+            .flatMap { decodeBusinessDocument(externalMessageId, it.businessDocument) }
+
+    private fun decodeBusinessDocument(externalMessageId: Uuid, base64: String): Either<ProcessingResult, String> =
         Either.catch {
             Base64.getDecoder().decode(base64).toString(Charsets.UTF_8)
         }
-            .getOrElse { failure ->
-                log.error(failure) { "Invalid Base64 document for $externalMessageId" }
-                raise(DECODING_BUSINESS_DOCUMENT_FAILED)
-            }
-    }
+            .onLeft { failure -> log.error(failure) { "Invalid Base64 document for $externalMessageId" } }
+            .mapLeft { DECODING_BUSINESS_DOCUMENT_FAILED }
 
-    private fun extractMessageId(externalMessageId: Uuid, xml: String): Either<ProcessingResult, Uuid> = either {
+    private fun extractMessageId(externalMessageId: Uuid, xml: String): Either<ProcessingResult, Uuid> =
         messageConverter.extractMessageId(xml)
-            .getOrElse { failure ->
-                log.error { "Failed extracting XML message ID for $externalMessageId: $failure" }
-                raise(EXTRACTING_MESSAGE_ID_FAILED)
-            }
-    }
+            .onLeft { log.error { "Failed extracting XML message ID for $externalMessageId: $it" } }
+            .mapLeft { EXTRACTING_MESSAGE_ID_FAILED }
 
-    private fun splitAttachments(externalMessageId: Uuid, xml: String): Either<ProcessingResult, SplitMessage> = either {
+    private fun splitAttachments(externalMessageId: Uuid, xml: String): Either<ProcessingResult, SplitMessage> =
         messageConverter.splitAttachments(xml)
-            .getOrElse { failure ->
-                log.error { "Failed splitting document for $externalMessageId: $failure" }
-                raise(SPLITTING_MESSAGE_FAILED)
-            }
-    }
+            .onLeft { log.error { "Failed splitting document for $externalMessageId: $it" } }
+            .mapLeft { SPLITTING_MESSAGE_FAILED }
 
     private suspend fun saveAttachments(
         messageId: Uuid,
@@ -221,10 +211,9 @@ class NotificationService(
             }
             attachmentClient.saveAttachments(messageId, clientAttachments)
                 .toEither()
-                .getOrElse { failure ->
-                    log.error(failure) { "Failed saving attachments for $messageId" }
-                    raise(SAVING_ATTACHMENTS_FAILED)
-                }
+                .onLeft { failure -> log.error(failure) { "Failed saving attachments for $messageId" } }
+                .mapLeft { SAVING_ATTACHMENTS_FAILED }
+                .bind()
         }
     }
 
@@ -244,27 +233,23 @@ class NotificationService(
     private suspend fun markMessageAsDownloaded(
         externalMessageId: Uuid,
         receiverHerId: Int
-    ): Either<ProcessingResult, Unit> = either {
+    ): Either<ProcessingResult, Unit> =
         ediAdapterClient.markMessageAsDownloaded(externalMessageId, MarkAsDownloadedRequest(receiverHerId))
-            .getOrElse { failure ->
-                log.error { "Failed marking message $externalMessageId as downloaded: $failure" }
-                raise(MARKING_MESSAGE_AS_DOWNLOADED_FAILED)
-            }
-    }
+            .onLeft { log.error { "Failed marking message $externalMessageId as downloaded: $it" } }
+            .mapLeft { MARKING_MESSAGE_AS_DOWNLOADED_FAILED }
 
-    private suspend fun sendAppRec(externalMessageId: Uuid, receiverHerId: Int): Either<ProcessingResult, Unit> = either {
+    private suspend fun sendAppRec(externalMessageId: Uuid, receiverHerId: Int): Either<ProcessingResult, Unit> {
         // TODO: Send AppRec after feedback from fagsystem instead of immediately after publication.
-        ediAdapterClient.postApprec(
+        return ediAdapterClient.postApprec(
             externalMessageId,
             PostAppRecRequest(
                 appRecSenderHerId = receiverHerId,
                 appRecStatus = AppRecStatus.OK
             )
         )
-            .getOrElse { failure ->
-                log.error { "Failed sending AppRec for $externalMessageId: $failure" }
-                raise(SENDING_APPREC_FAILED)
-            }
+            .onLeft { log.error { "Failed sending AppRec for $externalMessageId: $it" } }
+            .mapLeft { SENDING_APPREC_FAILED }
+            .map { }
     }
 
     private suspend fun deleteNotification(notificationId: Uuid) {
@@ -278,16 +263,14 @@ class NotificationService(
 
     private fun calculateContentHash(xml: String): Either<ProcessingResult, String> = either {
         val messageId = messageConverter.extractMessageId(xml)
-            .getOrElse { failure ->
-                log.error { "Failed extracting XML message ID for content hash calculation: $failure" }
-                raise(EXTRACTING_MESSAGE_ID_FAILED)
-            }
+            .onLeft { log.error { "Failed extracting XML message ID for content hash calculation: $it" } }
+            .mapLeft { EXTRACTING_MESSAGE_ID_FAILED }
+            .bind()
 
         messageConverter.calculateContentHash(xml)
-            .getOrElse {
-                log.error { "Failed calculating content hash for message $messageId" }
-                raise(CALCULATING_CONTENT_HASH_FAILED)
-            }
+            .onLeft { log.error { "Failed calculating content hash for message $messageId" } }
+            .mapLeft { CALCULATING_CONTENT_HASH_FAILED }
+            .bind()
     }
 }
 

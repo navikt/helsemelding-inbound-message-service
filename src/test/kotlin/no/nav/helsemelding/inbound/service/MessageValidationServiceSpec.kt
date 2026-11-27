@@ -12,6 +12,7 @@ import no.nav.helsemelding.inbound.FakeMessageRepository
 import no.nav.helsemelding.inbound.client.ClamAvClient
 import no.nav.helsemelding.inbound.model.MessageProcessingOutcome
 import no.nav.helsemelding.inbound.model.ProcessingResult
+import no.nav.helsemelding.inbound.model.ValidationResult
 import no.nav.helsemelding.messageconverter.model.Attachment
 import no.nav.helsemelding.messageconverter.model.SplitMessage
 import java.io.IOException
@@ -39,7 +40,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
-                validationService.validate(message, messageId, null) shouldBe ProcessingResult.SUCCESS
+                validationService.validate(message, messageId, null) shouldBe ValidationResult.OK
             }
         }
 
@@ -58,17 +59,17 @@ class MessageValidationServiceSpec : StringSpec(
 
                 HttpClient(engine).use { client ->
                     val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
-                    validationService.validate(message, messageId, null) shouldBe ProcessingResult.VIRUS_DETECTED
+                    validationService.validate(message, messageId, null) shouldBe ValidationResult.VIRUS_DETECTED
                 }
             }
         }
 
         "Should reject empty, malformed or unexpected scanning results" {
             listOf(
-                "[]" to ProcessingResult.VIRUS_SCAN_FAILED,
-                "invalid JSON" to ProcessingResult.VIRUS_SCAN_FAILED,
-                """[{"filename": "file0", "result": "UNKNOWN"}]""" to ProcessingResult.VIRUS_SCAN_FAILED,
-                """[{"filename": "file0"}]""" to ProcessingResult.VIRUS_SCAN_FAILED
+                "[]" to ValidationResult.VIRUS_SCAN_FAILED,
+                "invalid JSON" to ValidationResult.VIRUS_SCAN_FAILED,
+                """[{"filename": "file0", "result": "UNKNOWN"}]""" to ValidationResult.VIRUS_SCAN_FAILED,
+                """[{"filename": "file0"}]""" to ValidationResult.VIRUS_SCAN_FAILED
             ).forEach { (response, expected) ->
                 val engine = MockEngine { respond(response) }
 
@@ -84,7 +85,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
-                validationService.validate(message, messageId, null) shouldBe ProcessingResult.VIRUS_SCAN_FAILED
+                validationService.validate(message, messageId, null) shouldBe ValidationResult.VIRUS_SCAN_FAILED
             }
         }
 
@@ -93,7 +94,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
-                validationService.validate(message, messageId, null) shouldBe ProcessingResult.VIRUS_SCAN_FAILED
+                validationService.validate(message, messageId, null) shouldBe ValidationResult.VIRUS_SCAN_FAILED
             }
         }
 
@@ -106,7 +107,7 @@ class MessageValidationServiceSpec : StringSpec(
                 )
 
                 val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
-                validationService.validate(invalidMessage, messageId, null) shouldBe ProcessingResult.VIRUS_SCAN_FAILED
+                validationService.validate(invalidMessage, messageId, null) shouldBe ValidationResult.VIRUS_SCAN_FAILED
             }
         }
 
@@ -115,7 +116,7 @@ class MessageValidationServiceSpec : StringSpec(
 
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
-                validationService.validate(message.copy(attachments = emptyList()), messageId, null) shouldBe ProcessingResult.SUCCESS
+                validationService.validate(message.copy(attachments = emptyList()), messageId, null) shouldBe ValidationResult.OK
             }
         }
 
@@ -145,7 +146,7 @@ class MessageValidationServiceSpec : StringSpec(
             HttpClient(engine).use { client ->
                 val validationService = MessageValidationService(ClamAvClient(client), messageRepository)
                 val validationResult = validationService.validate(message, messageId, contentHash)
-                validationResult shouldBe ProcessingResult.DUPLICATE_MESSAGE_DETECTED
+                validationResult shouldBe ValidationResult.DUPLICATE_MESSAGE_DETECTED
             }
         }
     }

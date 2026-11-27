@@ -1,7 +1,9 @@
 package no.nav.helsemelding.inbound.client
 
 import arrow.core.Either
-import arrow.core.left
+import arrow.core.flatten
+import arrow.core.raise.either
+import arrow.core.raise.ensure
 import arrow.core.right
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
@@ -15,7 +17,6 @@ import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
-import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import no.nav.helsemelding.inbound.config
 import no.nav.helsemelding.inbound.model.ScanResult
@@ -31,28 +32,29 @@ class ClamAvClient(
     private val endpointUrl = config().clamAv.url
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun scanAttachments(attachments: List<Attachment>): Either<Throwable, List<ScanResult>> {
-        if (attachments.isEmpty()) {
-            log.debug { "Skipping ClamAV scan: no attachments" }
-            return emptyList<ScanResult>().right()
-        }
-
-        log.debug { "Scanning ${attachments.size} attachments with ClamAV" }
-
-        return try {
-            val formData = createAttachmentFormData(attachments)
-            val response = sendScanRequest(formData)
-            readScanResults(response).right()
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            log.error(error) { "ClamAV scan request failed" }
-            error.left()
+    suspend fun scanAttachments(attachments: List<Attachment>): Either<Throwable, List<ScanResult>> = Either.catch {
+        when {
+            attachments.isEmpty() -> {
+                log.debug { "Skipping ClamAV scan: no attachments" }
+                emptyList<ScanResult>().right()
+            }
+            else -> readScanResults(sendScanRequest(attachments))
         }
     }
+        .flatten()
+        .onLeft { error -> log.error(error) { "ClamAV scan request failed" } }
 
-    private fun createAttachmentFormData(attachments: List<Attachment>): List<PartData> = formData {
-        attachments.forEachIndexed { index, attachment ->
+    private suspend fun sendScanRequest(attachments: List<Attachment>): HttpResponse {
+        log.debug { "Scanning ${attachments.size} attachments with ClamAV" }
+        return httpClient.submitFormWithBinaryData(
+            url = "${endpointUrl.trimEnd('/')}/api/v2/scan",
+            formData = attachments.toFormData()
+        ) { accept(ContentType.Application.Json) }
+            .also { response -> log.debug { "ClamAV responded with HTTP ${response.status.value}" } }
+    }
+
+    private fun List<Attachment>.toFormData(): List<PartData> = formData {
+        forEachIndexed { index, attachment ->
             append(
                 key = "file$index",
                 value = Base64.getDecoder().decode(attachment.contentBase64),
@@ -64,23 +66,11 @@ class ClamAvClient(
         }
     }
 
-    private suspend fun sendScanRequest(formData: List<PartData>): HttpResponse =
-        httpClient.submitFormWithBinaryData(
-            url = "${endpointUrl.trimEnd('/')}/api/v2/scan",
-            formData = formData
-        ) {
-            accept(ContentType.Application.Json)
+    private suspend fun readScanResults(response: HttpResponse): Either<Throwable, List<ScanResult>> = either {
+        ensure(response.status == HttpStatusCode.OK) {
+            IOException("ClamAV scan failed with HTTP ${response.status.value}")
         }
-
-    private suspend fun readScanResults(response: HttpResponse): List<ScanResult> {
-        log.debug { "ClamAV responded with HTTP ${response.status.value}" }
-
-        if (response.status != HttpStatusCode.OK) {
-            throw IOException("ClamAV scan failed with HTTP ${response.status.value}")
-        }
-
-        val results = json.decodeFromString<List<ScanResult>>(response.bodyAsText())
-        log.debug { "ClamAV returned ${results.size} scan results" }
-        return results
+        json.decodeFromString<List<ScanResult>>(response.bodyAsText())
     }
+        .onRight { results -> log.debug { "ClamAV returned ${results.size} scan results" } }
 }
